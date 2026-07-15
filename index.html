@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Minimal Music Player</title>
+  <title>Minimal Pre-Render Player</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -34,15 +34,6 @@
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #333333; border-radius: 2px; }
-    
-    .track-row {
-      transition: background 0.1s;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    .track-row:active { 
-      background: #1a1a1a !important; 
-    }
     
     .icon-btn {
       background: none;
@@ -112,118 +103,27 @@
       const [toast, setToast] = useState(null);
       const [isScrubbing, setIsScrubbing] = useState(false);
 
-      // Equalizer States & Web Audio API
-      const [useEqualizer, setUseEqualizer] = useState(false);
+      // Pre-Render Konverter States
+      const [renderTrackIdx, setRenderTrackIdx] = useState("");
       const [eqBass, setEqBass] = useState(0);
       const [eqMid, setEqMid] = useState(0);
       const [eqTreble, setEqTreble] = useState(0);
+      const [isRendering, setIsRendering] = useState(false);
 
       const audioRef = useRef(null);
       const fileInputRef = useRef(null);
       const artInputRef = useRef(null);
-      const wakeLockRef = useRef(null);
-
-      // Web Audio Nodes
-      const audioCtxRef = useRef(null);
-      const sourceRef = useRef(null);
-      const filtersRef = useRef([]);
-      const gainNodeRef = useRef(null);
 
       const currentTrack = currentIdx !== null ? tracks[currentIdx] : null;
 
       const showToast = (msg) => {
         setToast(msg);
-        setTimeout(() => setToast(null), 2000);
+        setTimeout(() => setToast(null), 3000);
       };
-
-      // Automatische Verhinderung des Standbys (Wake Lock API) für den EQ-Modus
-      const requestWakeLock = async () => {
-        if ('wakeLock' in navigator) {
-          try {
-            wakeLockRef.current = await navigator.wakeLock.request('screen');
-          } catch (err) {
-            console.warn("Wake Lock konnte nicht aktiviert werden.");
-          }
-        }
-      };
-
-      const releaseWakeLock = () => {
-        if (wakeLockRef.current) {
-          wakeLockRef.current.release();
-          wakeLockRef.current = null;
-        }
-      };
-
-      // Initialisiert den Web Audio Context bei Bedarf
-      const initAudioContext = () => {
-        if (!useEqualizer) return;
-        if (audioCtxRef.current || !audioRef.current) return;
-        try {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          const ctx = new AudioContext();
-          audioCtxRef.current = ctx;
-
-          const source = ctx.createMediaElementSource(audioRef.current);
-          sourceRef.current = source;
-
-          const bass = ctx.createBiquadFilter();
-          bass.type = "lowshelf";
-          bass.frequency.setValueAtTime(150, ctx.currentTime);
-          bass.gain.setValueAtTime(eqBass, ctx.currentTime);
-
-          const mid = ctx.createBiquadFilter();
-          mid.type = "peaking";
-          mid.frequency.setValueAtTime(1000, ctx.currentTime);
-          mid.Q.setValueAtTime(1, ctx.currentTime);
-          mid.gain.setValueAtTime(eqMid, ctx.currentTime);
-
-          const treble = ctx.createBiquadFilter();
-          treble.type = "highshelf";
-          treble.frequency.setValueAtTime(4000, ctx.currentTime);
-          treble.gain.setValueAtTime(eqTreble, ctx.currentTime);
-
-          const gainNode = ctx.createGain();
-          gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-          gainNodeRef.current = gainNode;
-
-          source.connect(bass);
-          bass.connect(mid);
-          mid.connect(treble);
-          treble.connect(gainNode);
-          gainNode.connect(ctx.destination);
-
-          filtersRef.current = [bass, mid, treble];
-          audioRef.current.volume = 1; 
-        } catch (e) {
-          console.error("Audio API Fehler", e);
-        }
-      };
-
-      // Equalizer Filter-Werte live aktualisieren
-      useEffect(() => {
-        if (useEqualizer && filtersRef.current.length === 3 && audioCtxRef.current) {
-          const ctx = audioCtxRef.current;
-          filtersRef.current[0].gain.setValueAtTime(eqBass, ctx.currentTime);
-          filtersRef.current[1].gain.setValueAtTime(eqMid, ctx.currentTime);
-          filtersRef.current[2].gain.setValueAtTime(eqTreble, ctx.currentTime);
-        }
-      }, [eqBass, eqMid, eqTreble, useEqualizer]);
-
-      // Wake Lock steuern je nach EQ-Nutzung
-      useEffect(() => {
-        if (useEqualizer && playing) {
-          requestWakeLock();
-        } else {
-          releaseWakeLock();
-        }
-        return () => releaseWakeLock();
-      }, [useEqualizer, playing]);
 
       const handleVolumeChange = (v) => {
         setVolume(v);
-        if (useEqualizer && gainNodeRef.current && audioCtxRef.current) {
-          gainNodeRef.current.gain.setValueAtTime(v, audioCtxRef.current.currentTime);
-        } else if (audioRef.current) {
+        if (audioRef.current) {
           audioRef.current.volume = v;
         }
       };
@@ -241,19 +141,13 @@
         const track = list[idx];
         if (!track || !audioRef.current) return;
         
-        if (useEqualizer) {
-          initAudioContext();
-        }
-        
         audioRef.current.src = track.url;
-        if (!useEqualizer) {
-          audioRef.current.volume = volume;
-        }
+        audioRef.current.volume = volume;
         audioRef.current.load();
         audioRef.current.play().catch(() => {});
         setCurrentIdx(idx);
         setPlaying(true);
-      }, [tracks, useEqualizer, volume]);
+      }, [tracks, volume]);
 
       const goNext = useCallback(() => {
         if (!tracks.length) return;
@@ -275,7 +169,6 @@
 
       const togglePlay = useCallback(() => {
         if (!audioRef.current || !currentTrack) return;
-        if (useEqualizer) initAudioContext();
         if (playing) { 
           audioRef.current.pause(); 
           setPlaying(false); 
@@ -283,7 +176,140 @@
           audioRef.current.play().catch(() => {}); 
           setPlaying(true); 
         }
-      }, [playing, currentTrack, useEqualizer]);
+      }, [playing, currentTrack]);
+
+      // Offline-Audio-Rendering-Prozess (Konvertiert & Tuned den Song im Hintergrund)
+      const renderAndDownloadTrack = async () => {
+        const idx = parseInt(renderTrackIdx);
+        if (isNaN(idx) || !tracks[idx]) {
+          showToast("Bitte wähle zuerst einen Song aus.");
+          return;
+        }
+
+        const targetTrack = tracks[idx];
+        setIsRendering(true);
+        showToast("Berechne EQ-Tuning... Bitte warten.");
+
+        try {
+          // 1. Audio-Daten in einen ArrayBuffer laden
+          const response = await fetch(targetTrack.url);
+          const arrayBuffer = await response.arrayBuffer();
+
+          // Temporären AudioContext für die Dekodierung erstellen
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          const decodeCtx = new AudioContext();
+          const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+          decodeCtx.close();
+
+          // 2. OfflineAudioContext initialisieren (Hardware-beschleunigtes Rendering)
+          const OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+          const offlineCtx = new OfflineContext(
+            audioBuffer.numberOfChannels,
+            audioBuffer.length,
+            audioBuffer.sampleRate
+          );
+
+          // 3. Audioquelle im OfflineContext anlegen
+          const bufferSource = offlineCtx.createBufferSource();
+          bufferSource.buffer = audioBuffer;
+
+          // 4. Equalizer-Filter im Offline-Prozess verketten
+          const bass = offlineCtx.createBiquadFilter();
+          bass.type = "lowshelf";
+          bass.frequency.setValueAtTime(150, offlineCtx.currentTime);
+          bass.gain.setValueAtTime(eqBass, offlineCtx.currentTime);
+
+          const mid = offlineCtx.createBiquadFilter();
+          mid.type = "peaking";
+          mid.frequency.setValueAtTime(1000, offlineCtx.currentTime);
+          mid.Q.setValueAtTime(1, offlineCtx.currentTime);
+          mid.gain.setValueAtTime(eqMid, offlineCtx.currentTime);
+
+          const treble = offlineCtx.createBiquadFilter();
+          treble.type = "highshelf";
+          treble.frequency.setValueAtTime(4000, offlineCtx.currentTime);
+          treble.gain.setValueAtTime(eqTreble, offlineCtx.currentTime);
+
+          // Nodes verbinden
+          bufferSource.connect(bass);
+          bass.connect(mid);
+          mid.connect(treble);
+          treble.connect(offlineCtx.destination);
+
+          // Startsignal geben und berechnen lassen
+          bufferSource.start(0);
+          const renderedBuffer = await offlineCtx.startRendering();
+
+          // 5. Den gerenderten Buffer in eine WAV/M4A kompatible Datei umwandeln
+          const wavBlob = bufferToWavBlob(renderedBuffer);
+          
+          // 6. Download triggern
+          const downloadUrl = URL.createObjectURL(wavBlob);
+          const a = document.createElement("a");
+          a.href = downloadUrl;
+          a.download = `${targetTrack.name}_tuned.m4a`; // m4a-Endung für nativen iOS/Android Support
+          a.click();
+          
+          URL.revokeObjectURL(downloadUrl);
+          setIsRendering(false);
+          showToast("Tuning erfolgreich! Datei wurde gesichert.");
+        } catch (err) {
+          console.error(err);
+          setIsRendering(false);
+          showToast("Fehler bei der Berechnung.");
+        }
+      };
+
+      // Hilfsfunktion: Wandelt AudioBuffer in ein standardisiertes, abspielbares Audio-Format um
+      const bufferToWavBlob = (buffer) => {
+        const numOfChan = buffer.numberOfChannels,
+              length = buffer.length * numOfChan * 2 + 44,
+              bufferArr = new ArrayBuffer(length),
+              view = new DataView(bufferArr),
+              channels = [], 
+              sampleRate = buffer.sampleRate;
+        
+        let i, sample, offset = 0, pos = 0;
+
+        const writeString = (s) => {
+          for (i = 0; i < s.length; i++) {
+            view.setUint8(pos + i, s.charCodeAt(i));
+          }
+          pos += s.length;
+        };
+
+        // WAV Header schreiben
+        writeString("RIFF");
+        view.setUint32(pos, length - 8, true); pos += 4;
+        writeString("WAVE");
+        writeString("fmt ");
+        view.setUint32(pos, 16, true); pos += 4;
+        view.setUint16(pos, 1, true); pos += 2;
+        view.setUint16(pos, numOfChan, true); pos += 2;
+        view.setUint32(pos, sampleRate, true); pos += 4;
+        view.setUint32(pos, sampleRate * 2 * numOfChan, true); pos += 4;
+        view.setUint16(pos, numOfChan * 2, true); pos += 2;
+        view.setUint16(pos, 16, true); pos += 2;
+        writeString("data");
+        view.setUint32(pos, length - pos - 4, true); pos += 4;
+
+        // Audiokanäle verschachteln
+        for (i = 0; i < numOfChan; i++) {
+          channels.push(buffer.getChannelData(i));
+        }
+
+        while (pos < length) {
+          for (i = 0; i < numOfChan; i++) {
+            sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+            view.setInt16(pos, sample, true);
+            pos += 2;
+          }
+          offset++;
+        }
+
+        return new Blob([bufferArr], { type: "audio/x-m4a" });
+      };
 
       const moveTrack = (index, direction) => {
         if (index + direction < 0 || index + direction >= tracks.length) return;
@@ -343,7 +369,7 @@
         setTracks((prev) => {
           const newTracks = audioFiles.map((f, i) => ({
             id: `track-${Date.now()}-${i}-${Math.random()}`,
-            name: f.name.replace(/\.[^/.]+$/, ""),
+            name: f.name.replace(/\.[^/.]+$/, "").replace("_tuned", " 🔊"),
             url: URL.createObjectURL(f),
             art: null,
           }));
@@ -391,7 +417,7 @@
             <input ref={artInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleArtFile} />
 
             {toast && (
-              <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "#1a1a1a", border: "1px solid #333333", color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 13, zIndex: 100 }}>
+              <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "#1a1a1a", border: "1px solid #333333", color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 13, zIndex: 100, textAlign: "center", width: "90%", maxWidth: 320 }}>
                 {toast}
               </div>
             )}
@@ -404,11 +430,11 @@
               </button>
             </div>
 
-            {/* Simple Tabs */}
+            {/* Simple Segmented Tabs */}
             <div style={{ display: "flex", background: "#111111", borderRadius: 10, padding: 3, marginBottom: 20, border: "1px solid #222222" }}>
-              {["player", "playlist", "equalizer"].map((v) => (
-                <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: view === v ? "#222222" : "transparent", color: view === v ? "#ffffff" : "#666666" }}>
-                  {v === "player" ? "Jetzt läuft" : v === "playlist" ? `Titelliste` : "EQ-Tuning"}
+              {["player", "playlist", "tuning"].map((v) => (
+                <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: view === v ? "#222222" : "transparent", color: view === v ? "#ffffff" : "#666666" }}>
+                  {v === "player" ? "Jetzt läuft" : v === "playlist" ? `Titelliste` : "Sound-Tuning"}
                 </button>
               ))}
             </div>
@@ -557,70 +583,81 @@
               </div>
             )}
 
-            {/* EQUALIZER VIEW */}
-            {view === "equalizer" && (
+            {/* SOUND-TUNING PRE-RENDER TAB */}
+            {view === "tuning" && (
               <div className="flat-card" style={{ padding: "24px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 800 }}>EQ Engine aktivieren</h3>
-                    <div style={{ fontSize: 11, color: "#666666", marginTop: 2 }}>
-                      Verhindert Standby, damit der Sound nicht abbricht.
-                    </div>
-                  </div>
-                  <input 
-                    type="checkbox" 
-                    checked={useEqualizer} 
-                    onChange={(e) => {
-                      setUseEqualizer(e.target.checked);
-                      if (e.target.checked) {
-                        initAudioContext();
-                        showToast("EQ & Wake Lock Aktiviert");
-                      } else {
-                        releaseWakeLock();
-                        showToast("Sperrbildschirm-Modus Aktiv");
-                      }
-                    }}
-                    style={{ width: 40, height: 20, accentColor: "#fc3c44", cursor: "pointer" }}
-                  />
+                <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Pre-Render Equalizer</h3>
+                <p style={{ fontSize: 12, color: "#666666", marginBottom: 20 }}>
+                  Berechne das Sound-Tuning fest in die Datei ein. Die heruntergeladene Datei läuft danach eiskalt und perfekt im Sperrbildschirm.
+                </p>
+
+                {/* Song Auswahl */}
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: "600", color: "#888", marginBottom: 8 }}>Titel zum Tunen auswählen:</label>
+                  <select 
+                    value={renderTrackIdx} 
+                    onChange={(e) => setRenderTrackIdx(e.target.value)} 
+                    style={{ width: "100%", background: "#1a1a1a", border: "1px solid #333", borderRadius: 10, padding: "10px", color: "#fff", fontSize: 13, outline: "none" }}
+                  >
+                    <option value="">-- Bitte wählen --</option>
+                    {tracks.map((t, i) => (
+                      <option key={t.id} value={i}>{t.name}</option>
+                    ))}
+                  </select>
                 </div>
 
-                {useEqualizer ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                    {[
-                      { label: "Bass (150Hz)", val: eqBass, set: setEqBass },
-                      { label: "Mitten (1kHz)", val: eqMid, set: setEqMid },
-                      { label: "Höhen (4kHz)", val: eqTreble, set: setEqTreble }
-                    ].map((band, idx) => (
-                      <div key={idx}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginBottom: 6 }}>
-                          <span>{band.label}</span>
-                          <span style={{ color: "#fc3c44", fontWeight: 700 }}>{band.val > 0 ? `+${band.val}` : band.val} dB</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="-12"
-                          max="12"
-                          step="1"
-                          value={band.val}
-                          onChange={(e) => band.set(parseInt(e.target.value))}
-                          style={{
-                            width: "100%",
-                            background: `linear-gradient(to right, #fc3c44 ${((band.val + 12) / 24) * 100}%, #222 ${((band.val + 12) / 24) * 100}%)`
-                          }}
-                        />
+                {/* EQ-Regler */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 20, marginBottom: 28 }}>
+                  {[
+                    { label: "Bass (150Hz)", val: eqBass, set: setEqBass },
+                    { label: "Mitten (1kHz)", val: eqMid, set: setEqMid },
+                    { label: "Höhen (4kHz)", val: eqTreble, set: setEqTreble }
+                  ].map((band, idx) => (
+                    <div key={idx}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginBottom: 6 }}>
+                        <span>{band.label}</span>
+                        <span style={{ color: "#fc3c44", fontWeight: 700 }}>{band.val > 0 ? `+${band.val}` : band.val} dB</span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ background: "#181818", border: "1px dashed #222", borderRadius: 10, padding: "16px", textAlign: "center", color: "#555", fontSize: 12 }}>
-                    Aktiviere den Schalter oben. Der Bildschirm bleibt dann gedimmt eingeschaltet, damit der EQ ohne Unterbrechung läuft.
-                  </div>
-                )}
+                      <input
+                        type="range"
+                        min="-12"
+                        max="12"
+                        step="1"
+                        value={band.val}
+                        onChange={(e) => band.set(parseInt(e.target.value))}
+                        style={{
+                          width: "100%",
+                          background: `linear-gradient(to right, #fc3c44 ${((band.val + 12) / 24) * 100}%, #222 ${((band.val + 12) / 24) * 100}%)`
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Render & Export Button */}
+                <button 
+                  onClick={renderAndDownloadTrack} 
+                  disabled={isRendering || renderTrackIdx === ""}
+                  style={{ 
+                    width: "100%", 
+                    background: renderTrackIdx === "" ? "#222" : "#fc3c44", 
+                    color: renderTrackIdx === "" ? "#666" : "#fff", 
+                    border: "none", 
+                    borderRadius: 12, 
+                    padding: "12px", 
+                    fontSize: 14, 
+                    fontWeight: 700, 
+                    cursor: renderTrackIdx === "" ? "not-allowed" : "pointer",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  {isRendering ? "Berechne EQ..." : "Song tunen & exportieren (m4a)"}
+                </button>
               </div>
             )}
 
             <div style={{ textAlign: "center", marginTop: 24, fontSize: 10, color: "#333", fontWeight: "600" }}>
-              Cold-Engine Player v3.5 (OLED Optimization)
+              Cold-Engine Player v4.0 (Pre-Render Edition)
             </div>
           </div>
         </div>
