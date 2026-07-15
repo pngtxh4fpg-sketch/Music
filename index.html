@@ -88,6 +88,11 @@
         setTimeout(() => setToast(null), 2500);
       };
 
+      // Hilfsfunktion zur verlässlichen Erkennung von Audio-Dateien
+      const isAudioFile = (file) => {
+        return file.type.includes("audio") || /\.(mp3|wav|ogg|m4a|flac|aac|opus)$/i.test(file.name);
+      };
+
       const playTrack = useCallback((idx, trackList) => {
         const list = trackList || tracks;
         const track = list[idx];
@@ -156,8 +161,11 @@
       }, [goNext, repeat]);
 
       const handleFiles = (files) => {
-        const audioFiles = Array.from(files).filter((f) => f.type.includes("audio"));
-        if (!audioFiles.length) return;
+        const audioFiles = Array.from(files).filter(isAudioFile);
+        if (!audioFiles.length) {
+          showToast("Keine Audio-Dateien erkannt!");
+          return;
+        }
         setTracks((prev) => {
           const newTracks = audioFiles.map((f) => ({
             name: f.name.replace(/\.[^/.]+$/, ""),
@@ -237,8 +245,11 @@
       };
 
       const handleBatchMP3s = (e) => {
-        const files = Array.from(e.target.files).filter((f) => f.type.includes("audio"));
-        if (!files.length) return;
+        const files = Array.from(e.target.files).filter(isAudioFile);
+        if (!files.length) {
+          showToast("Keine Audio-Dateien erkannt!");
+          return;
+        }
         if (importedMeta) {
           const newTracks = importedMeta.map((meta) => {
             const match = files.find((f) => f.name.replace(/\.[^/.]+$/, "") === meta.name);
@@ -274,10 +285,10 @@
           <div style={{ width: "100%", maxWidth: 420 }}>
 
             <audio ref={audioRef} preload="auto" />
-            <input ref={fileInputRef} type="file" accept="audio/*" multiple style={{ display: "none" }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
+            <input ref={fileInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" multiple style={{ display: "none" }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
             <input ref={artInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleArtFile} />
             <input ref={playlistInputRef} type="file" accept=".json" style={{ display: "none" }} onChange={handlePlaylistImport} />
-            <input ref={mp3BatchInputRef} type="file" accept="audio/*" multiple style={{ display: "none" }} onChange={handleBatchMP3s} />
+            <input ref={mp3BatchInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" multiple style={{ display: "none" }} onChange={handleBatchMP3s} />
 
             {toast && (
               <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", background: "#7c5cfc", color: "#fff", padding: "10px 20px", borderRadius: 10, fontSize: 13, fontWeight: 500, zIndex: 100, boxShadow: "0 4px 20px rgba(0,0,0,0.4)", whiteSpace: "nowrap" }}>
