@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Music Player</title>
+  <title>Liquid Glass Music Player</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
     * { 
       box-sizing: border-box; 
@@ -17,40 +17,105 @@
     }
     
     html, body { 
-      background: #000000; 
-      min-height: 100%; 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #050505; 
+      min-height: 100vh; 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       color: #ffffff;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Liquid Glass Fluid Background Blobs */
+    .glass-bg-blobs {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: -1;
+      overflow: hidden;
+      background: #030303;
+    }
+    
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.35;
+      mix-blend-mode: screen;
+      animation: fluidMove 25s infinite alternate ease-in-out;
+    }
+    
+    .blob-1 {
+      width: 450px; height: 450px;
+      background: radial-gradient(circle, #ff2d55 0%, #9b00e8 100%);
+      top: -10%; left: -10%;
+      animation-delay: 0s;
+    }
+    
+    .blob-2 {
+      width: 550px; height: 550px;
+      background: radial-gradient(circle, #007aff 0%, #00f0ff 100%);
+      bottom: -10%; right: -10%;
+      animation-delay: 5s;
+    }
+    
+    .blob-3 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, #fc3c44 0%, #ff9500 100%);
+      top: 35%; left: 45%;
+      animation-delay: 10s;
+    }
+    
+    @keyframes fluidMove {
+      0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+      50% { transform: translate(100px, 60px) scale(1.25) rotate(180deg); }
+      100% { transform: translate(-50px, -90px) scale(0.9) rotate(360deg); }
+    }
+
+    /* Liquid Glass Card Container */
+    .liquid-glass {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(40px) saturate(210%);
+      -webkit-backdrop-filter: blur(40px) saturate(210%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 
+        0 40px 80px rgba(0, 0, 0, 0.65), 
+        inset 0 1px 2px rgba(255, 255, 255, 0.25);
+      border-radius: 36px;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     }
     
     @keyframes bar1 { from { height: 4px; } to { height: 22px; } }
     @keyframes bar2 { from { height: 8px; } to { height: 16px; } }
     @keyframes bar3 { from { height: 6px; } to { height: 24px; } }
     @keyframes bar4 { from { height: 10px; } to { height: 14px; } }
-    @keyframes bar5 { from { height: 5px; } to { height: 20px; } }
     
-    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #3a3a3c; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
     
+    /* Drag & Drop Optimization */
     .track-row {
       transition: background 0.2s, transform 0.1s;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      -webkit-user-drag: element;
     }
     .track-row:hover { 
       background: rgba(255, 255, 255, 0.05) !important; 
     }
     .track-row.dragging {
-      opacity: 0.5;
-      background: rgba(255, 255, 255, 0.1) !important;
-      transform: scale(0.98);
+      opacity: 0.3;
+      background: rgba(255, 255, 255, 0.15) !important;
+      transform: scale(0.97);
     }
     
     .icon-btn {
       transition: transform 0.1s, opacity 0.2s;
     }
     .icon-btn:hover { 
-      opacity: 0.8; 
+      opacity: 0.85; 
+      transform: scale(1.05);
     }
     .icon-btn:active {
       transform: scale(0.92);
@@ -64,13 +129,43 @@
       opacity: 1; 
     }
     
+    /* Liquid CSS Range Sliders */
     input[type=range] { 
-      accent-color: #fc3c44; 
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
       cursor: pointer;
+      background: rgba(255, 255, 255, 0.15);
+      transition: background 0.3s;
+    }
+    
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
     }
   </style>
 </head>
 <body>
+
+  <div class="glass-bg-blobs">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
   <div id="root"></div>
 
   <script type="text/babel">
@@ -84,28 +179,28 @@
     };
 
     const MusicNote = () => (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" strokeWidth="1.5" strokeLinecap="round">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round">
         <path d="M9 18V5l12-2v13"/>
         <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
       </svg>
     );
 
     const DragIcon = () => (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="2" strokeLinecap="round">
-        <line x1="4" y1="9" x2="20" y2="9" />
-        <line x1="4" y1="15" x2="20" y2="15" />
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 255, 255, 0.4)" strokeWidth="2" strokeLinecap="round">
+        <line x1="4" y1="8" x2="20" y2="8" />
+        <line x1="4" y1="16" x2="20" y2="16" />
       </svg>
     );
 
-    const Bars = ({ n = 5, size = "lg" }) => {
+    const Bars = ({ n = 4, size = "lg" }) => {
       const widths = size === "sm" ? 2 : 3;
       const containerH = size === "sm" ? 12 : 24;
       return (
-        <div style={{ display: "flex", alignItems: "flex-end", gap: size === "sm" ? 2 : 3, height: containerH }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: containerH }}>
           {Array.from({ length: n }).map((_, i) => (
             <div key={i} style={{
               width: widths, borderRadius: 1, background: "#fc3c44",
-              animation: `bar${(i % 5) + 1} ${0.55 + i * 0.15}s ease-in-out infinite alternate`,
+              animation: `bar${(i % 4) + 1} ${0.5 + i * 0.12}s ease-in-out infinite alternate`,
             }} />
           ))}
         </div>
@@ -126,6 +221,14 @@
       const [toast, setToast] = useState(null);
       const [importedMeta, setImportedMeta] = useState(null);
       
+      // Timeline Scrubbing State
+      const [isScrubbing, setIsScrubbing] = useState(false);
+
+      // Web Audio Equalizer States
+      const [eqBass, setEqBass] = useState(0);     // Range: -12 to 12
+      const [eqMid, setEqMid] = useState(0);       // Range: -12 to 12
+      const [eqTreble, setEqTreble] = useState(0);   // Range: -12 to 12
+
       // Drag & Drop State
       const [draggedIdx, setDraggedIdx] = useState(null);
 
@@ -134,6 +237,12 @@
       const artInputRef = useRef(null);
       const playlistInputRef = useRef(null);
       const mp3BatchInputRef = useRef(null);
+
+      // Web Audio API References
+      const audioCtxRef = useRef(null);
+      const sourceRef = useRef(null);
+      const filtersRef = useRef([]); // [BassNode, MidNode, TrebleNode]
+      const gainNodeRef = useRef(null);
 
       const currentTrack = currentIdx !== null ? tracks[currentIdx] : null;
 
@@ -146,16 +255,90 @@
         return file.type.includes("audio") || /\.(mp3|wav|ogg|m4a|flac|aac|opus)$/i.test(file.name);
       };
 
+      // WEB AUDIO EQUALIZER INITIALISIERUNG
+      const initAudioContext = () => {
+        if (audioCtxRef.current || !audioRef.current) return;
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          const ctx = new AudioContext();
+          audioCtxRef.current = ctx;
+
+          const source = ctx.createMediaElementSource(audioRef.current);
+          sourceRef.current = source;
+
+          // Bass Filter (Lowshelf bei 150 Hz)
+          const bass = ctx.createBiquadFilter();
+          bass.type = "lowshelf";
+          bass.frequency.setValueAtTime(150, ctx.currentTime);
+          bass.gain.setValueAtTime(eqBass, ctx.currentTime);
+
+          // Mitten Filter (Peaking bei 1000 Hz)
+          const mid = ctx.createBiquadFilter();
+          mid.type = "peaking";
+          mid.frequency.setValueAtTime(1000, ctx.currentTime);
+          mid.Q.setValueAtTime(1, ctx.currentTime);
+          mid.gain.setValueAtTime(eqMid, ctx.currentTime);
+
+          // Höhen Filter (Highshelf bei 4000 Hz)
+          const treble = ctx.createBiquadFilter();
+          treble.type = "highshelf";
+          treble.frequency.setValueAtTime(4000, ctx.currentTime);
+          treble.gain.setValueAtTime(eqTreble, ctx.currentTime);
+
+          // Gain Node für präzise Lautstärkesteuerung
+          const gainNode = ctx.createGain();
+          gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+          gainNodeRef.current = gainNode;
+
+          // Verbindung herstellen
+          source.connect(bass);
+          bass.connect(mid);
+          mid.connect(treble);
+          treble.connect(gainNode);
+          gainNode.connect(ctx.destination);
+
+          filtersRef.current = [bass, mid, treble];
+
+          // Damit Web Audio API Lautstärke-Double-Attenuation vermieden wird
+          audioRef.current.volume = 1; 
+        } catch (e) {
+          console.error("Web Audio API konnte nicht gestartet werden", e);
+        }
+      };
+
+      // Equalizer Filter Live-Updates
+      useEffect(() => {
+        if (filtersRef.current.length === 3 && audioCtxRef.current) {
+          const ctx = audioCtxRef.current;
+          filtersRef.current[0].gain.setValueAtTime(eqBass, ctx.currentTime);
+          filtersRef.current[1].gain.setValueAtTime(eqMid, ctx.currentTime);
+          filtersRef.current[2].gain.setValueAtTime(eqTreble, ctx.currentTime);
+        }
+      }, [eqBass, eqMid, eqTreble]);
+
+      // Lautstärke Live-Update
+      const handleVolumeChange = (v) => {
+        setVolume(v);
+        if (gainNodeRef.current && audioCtxRef.current) {
+          gainNodeRef.current.gain.setValueAtTime(v, audioCtxRef.current.currentTime);
+        } else if (audioRef.current) {
+          audioRef.current.volume = v;
+        }
+      };
+
       const playTrack = useCallback((idx, trackList) => {
         const list = trackList || tracks;
         const track = list[idx];
         if (!track || !audioRef.current) return;
+        
+        initAudioContext(); // Aktiviert EQ & AudioGraph bei Interaktion
+        
         audioRef.current.src = track.url;
         audioRef.current.load();
         audioRef.current.play().catch(() => {});
         setCurrentIdx(idx);
         setPlaying(true);
-      }, [tracks]);
+      }, [tracks, eqBass, eqMid, eqTreble, volume]);
 
       const goNext = useCallback(() => {
         if (!tracks.length) return;
@@ -177,43 +360,41 @@
 
       const togglePlay = useCallback(() => {
         if (!audioRef.current || !currentTrack) return;
+        initAudioContext();
         if (playing) { audioRef.current.pause(); setPlaying(false); }
         else { audioRef.current.play().catch(() => {}); setPlaying(true); }
       }, [playing, currentTrack]);
 
-      // DRAG & DROP HANDLERS
+      // STABILES DRAG & DROP FÜR PLAYLIST (Drop-based Sorting)
       const handleDragStart = (e, index) => {
         setDraggedIdx(index);
         e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", index);
       };
 
-      const handleDragOver = (e, overIndex) => {
+      const handleDrop = (e, targetIdx) => {
         e.preventDefault();
-        if (draggedIdx === null || draggedIdx === overIndex) return;
+        if (draggedIdx === null || draggedIdx === targetIdx) return;
 
         const updatedTracks = [...tracks];
         const draggedTrack = updatedTracks[draggedIdx];
         
-        // Verschiebe Song im Array
+        // Element verschieben
         updatedTracks.splice(draggedIdx, 1);
-        updatedTracks.splice(overIndex, 0, draggedTrack);
+        updatedTracks.splice(targetIdx, 0, draggedTrack);
 
-        // Halte den aktuell spielenden Song-Index synchron
+        // Aktuellen Track-Index anpassen damit Wiedergabe nahtlos bleibt
         if (currentIdx !== null) {
           if (currentIdx === draggedIdx) {
-            setCurrentIdx(overIndex);
-          } else if (draggedIdx < currentIdx && overIndex >= currentIdx) {
+            setCurrentIdx(targetIdx);
+          } else if (draggedIdx < currentIdx && targetIdx >= currentIdx) {
             setCurrentIdx(currentIdx - 1);
-          } else if (draggedIdx > currentIdx && overIndex <= currentIdx) {
+          } else if (draggedIdx > currentIdx && targetIdx <= currentIdx) {
             setCurrentIdx(currentIdx + 1);
           }
         }
 
-        setDraggedIdx(overIndex);
         setTracks(updatedTracks);
-      };
-
-      const handleDragEnd = () => {
         setDraggedIdx(null);
       };
 
@@ -221,22 +402,23 @@
         if (!("mediaSession" in navigator) || !currentTrack) return;
         navigator.mediaSession.metadata = new MediaMetadata({
           title: currentTrack.name,
-          artist: "Meine Mediathek",
+          artist: "Liquid Mediathek",
           artwork: currentTrack.art ? [{ src: currentTrack.art, sizes: "512x512", type: "image/jpeg" }] : [],
         });
         navigator.mediaSession.setActionHandler("play", () => { audioRef.current?.play(); setPlaying(true); });
         navigator.mediaSession.setActionHandler("pause", () => { audioRef.current?.pause(); setPlaying(false); });
         navigator.mediaSession.setActionHandler("nexttrack", goNext);
         navigator.mediaSession.setActionHandler("previoustrack", goPrev);
-        navigator.mediaSession.setActionHandler("seekto", (d) => {
-          if (audioRef.current && d.seekTime != null) audioRef.current.currentTime = d.seekTime;
-        });
       }, [currentTrack, goNext, goPrev]);
 
       useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        const onTime = () => setCurrentTime(audio.currentTime);
+        const onTime = () => {
+          if (!isScrubbing) {
+            setCurrentTime(audio.currentTime);
+          }
+        };
         const onDur = () => setDuration(audio.duration);
         const onEnded = () => { if (repeat) { audio.currentTime = 0; audio.play(); } else goNext(); };
         audio.addEventListener("timeupdate", onTime);
@@ -247,7 +429,7 @@
           audio.removeEventListener("loadedmetadata", onDur);
           audio.removeEventListener("ended", onEnded);
         };
-      }, [goNext, repeat]);
+      }, [goNext, repeat, isScrubbing]);
 
       const handleFiles = (files) => {
         const audioFiles = Array.from(files).filter(isAudioFile);
@@ -257,15 +439,14 @@
         }
         setTracks((prev) => {
           const newTracks = audioFiles.map((f, i) => ({
-            id: `track-${Date.now()}-${i}-${Math.random()}`, // Eindeutige ID für flüssigen Reorder
+            id: `track-${Date.now()}-${i}-${Math.random()}`,
             name: f.name.replace(/\.[^/.]+$/, ""),
             url: URL.createObjectURL(f),
             art: null,
           }));
-          const combined = [...prev, ...newTracks];
-          if (prev.length === 0) setTimeout(() => playTrack(0, combined), 80);
-          return combined;
+          return [...prev, ...newTracks]; // KEIN automatisches Abspielen mehr!
         });
+        showToast(`${audioFiles.length} Titel zur Playlist hinzugefügt`);
       };
 
       const handleArtFile = (e) => {
@@ -363,25 +544,17 @@
           const combined = [...newTracks, ...unmatched];
           setTracks(combined);
           setImportedMeta(null);
-          if (combined.length > 0) setTimeout(() => playTrack(0, combined), 80);
-          showToast(`${combined.length} Titel geladen`);
+          showToast(`${combined.length} Titel geladen (Nicht automatisch gestartet)`);
         } else {
           handleFiles(files);
         }
         e.target.value = "";
       };
 
-      const seek = (e) => {
-        if (!audioRef.current || !duration) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        audioRef.current.currentTime = ratio * duration;
-      };
-
       const progress = duration ? (currentTime / duration) * 100 : 0;
 
       return (
-        <div style={{ minHeight: "100vh", background: "#000000", color: "#ffffff", display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 16px 60px" }}>
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 16px 80px" }}>
           <div style={{ width: "100%", maxWidth: 410 }}>
 
             <audio ref={audioRef} preload="auto" />
@@ -391,44 +564,44 @@
             <input ref={mp3BatchInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" multiple style={{ display: "none" }} onChange={handleBatchMP3s} />
 
             {toast && (
-              <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", background: "rgba(30, 30, 30, 0.9)", backdropFilter: "blur(20px)", color: "#fff", padding: "12px 24px", borderRadius: 24, fontSize: 14, fontWeight: 600, zIndex: 100, boxShadow: "0 8px 30px rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.08)", whiteSpace: "nowrap" }}>
+              <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", background: "rgba(255, 255, 255, 0.12)", backdropFilter: "blur(25px)", color: "#fff", padding: "12px 24px", borderRadius: 24, fontSize: 13, fontWeight: 600, zIndex: 100, boxShadow: "0 10px 30px rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.18)", whiteSpace: "nowrap" }}>
                 {toast}
               </div>
             )}
 
-            {/* Apple Music Header */}
+            {/* Apple Music Glass Header */}
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28, padding: "0 8px" }}>
               <div>
-                <div style={{ fontSize: 32, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.5px" }}>Mediathek</div>
+                <div style={{ fontSize: 32, fontWeight: 800, color: "#ffffff", letterSpacing: "-1px", textShadow: "0 2px 10px rgba(0,0,0,0.3)" }}>Mediathek</div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => playlistInputRef.current?.click()} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 20, color: "#fc3c44", cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 600, transition: "background 0.2s" }} onMouseEnter={(e)=>e.target.style.background="rgba(255,255,255,0.12)"} onMouseLeave={(e)=>e.target.style.background="rgba(255,255,255,0.08)"}>↑ Import</button>
-                <button onClick={exportPlaylist} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 20, color: "#fc3c44", cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 600, transition: "background 0.2s" }} onMouseEnter={(e)=>e.target.style.background="rgba(255,255,255,0.12)"} onMouseLeave={(e)=>e.target.style.background="rgba(255,255,255,0.08)"}>↓ Export</button>
+                <button onClick={() => playlistInputRef.current?.click()} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, color: "#fc3c44", cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 600, transition: "all 0.2s" }} onMouseEnter={(e)=>e.target.style.background="rgba(255,255,255,0.14)"} onMouseLeave={(e)=>e.target.style.background="rgba(255,255,255,0.08)"}>Import</button>
+                <button onClick={exportPlaylist} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, color: "#fc3c44", cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 600, transition: "all 0.2s" }} onMouseEnter={(e)=>e.target.style.background="rgba(255,255,255,0.14)"} onMouseLeave={(e)=>e.target.style.background="rgba(255,255,255,0.08)"}>Export</button>
               </div>
             </div>
 
-            {/* iOS Segmented Control Tab Switcher */}
-            <div style={{ display: "flex", background: "rgba(116, 116, 128, 0.18)", borderRadius: 10, padding: 2, marginBottom: 24 }}>
-              {["player", "playlist"].map((v) => (
-                <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: view === v ? "rgba(255,255,255,0.12)" : "transparent", color: "#ffffff", transition: "all 0.15s ease", boxShadow: view === v ? "0 1px 3px rgba(0,0,0,0.3)" : "none" }}>
-                  {v === "player" ? "Jetzt läuft" : `Titelliste${tracks.length ? ` (${tracks.length})` : ""}`}
+            {/* iOS Segmented Control (Tabs) */}
+            <div style={{ display: "flex", background: "rgba(255, 255, 255, 0.08)", backdropFilter: "blur(20px)", borderRadius: 14, padding: 3, marginBottom: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+              {["player", "playlist", "settings"].map((v) => (
+                <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "8px 0", borderRadius: 11, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: view === v ? "rgba(255,255,255,0.12)" : "transparent", color: view === v ? "#ffffff" : "rgba(255,255,255,0.55)", transition: "all 0.2s ease", boxShadow: view === v ? "0 4px 12px rgba(0,0,0,0.25)" : "none" }}>
+                  {v === "player" ? "Jetzt läuft" : v === "playlist" ? `Titelliste (${tracks.length})` : "Settings"}
                 </button>
               ))}
             </div>
 
             {/* PLAYER VIEW */}
             {view === "player" && (
-              <div style={{ background: "rgba(28, 28, 30, 0.6)", backdropFilter: "blur(30px)", borderRadius: 32, padding: "32px 24px", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }}>
+              <div className="liquid-glass" style={{ padding: "32px 24px" }}>
                 
                 {/* Artwork */}
-                <div style={{ width: "100%", aspectRatio: "1", borderRadius: 24, marginBottom: 32, overflow: "hidden", position: "relative", background: "#1c1c1e", boxShadow: "0 12px 36px rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: "100%", aspectRatio: "1", borderRadius: 24, marginBottom: 32, overflow: "hidden", position: "relative", background: "rgba(255,255,255,0.02)", boxShadow: "0 16px 40px rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.1)" }}>
                   {currentTrack?.art ? (
                     <img src={currentTrack.art} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", position: "relative" }}>
-                      <div style={{ width: 150, height: 150, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.05)", position: "absolute" }} />
-                      <div style={{ width: 100, height: 100, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.08)", position: "absolute" }} />
-                      <div style={{ width: 56, height: 56, borderRadius: "50%", background: playing ? "#fc3c44" : "#2c2c2e", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, transition: "background 0.3s" }}>
+                      <div style={{ width: 140, height: 140, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.04)", position: "absolute" }} />
+                      <div style={{ width: 90, height: 90, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.06)", position: "absolute" }} />
+                      <div style={{ width: 60, height: 60, borderRadius: "50%", background: playing ? "#fc3c44" : "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, transition: "background 0.3s" }}>
                         <MusicNote />
                       </div>
                       {playing && <div style={{ position: "absolute", bottom: 24, zIndex: 2 }}><Bars /></div>}
@@ -438,7 +611,7 @@
                     <div style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)" }}><Bars /></div>
                   )}
                   {currentTrack && (
-                    <button onClick={(e) => openArtPicker(currentIdx, e)} style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, color: "#ffffff", cursor: "pointer", padding: "6px 12px", fontSize: 11, fontWeight: 600 }}>
+                    <button onClick={(e) => openArtPicker(currentIdx, e)} style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, color: "#ffffff", cursor: "pointer", padding: "6px 12px", fontSize: 11, fontWeight: 600 }}>
                       {currentTrack.art ? "Ändern" : "+ Cover"}
                     </button>
                   )}
@@ -446,26 +619,47 @@
 
                 {/* Track Info */}
                 <div style={{ marginBottom: 28, minHeight: 52, padding: "0 4px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#ffffff", letterSpacing: "-0.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 4 }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 4 }}>
                     {currentTrack ? currentTrack.name : "Nicht geladen"}
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: "#8e8e93" }}>
-                    {currentTrack ? `Song ${(currentIdx ?? 0) + 1} von ${tracks.length}` : "Füge Musik in der Liste hinzu"}
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>
+                    {currentTrack ? `Song ${(currentIdx ?? 0) + 1} von ${tracks.length}` : "Lade Titel im Tab 'Titelliste'"}
                   </div>
                 </div>
 
-                {/* Apple Music Progress bar */}
-                <div onClick={seek} style={{ height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, cursor: "pointer", marginBottom: 10, position: "relative" }}>
-                  <div style={{ width: `${progress}%`, height: "100%", background: "#ffffff", borderRadius: 2 }} />
-                  {progress > 0 && <div style={{ position: "absolute", top: "50%", left: `${progress}%`, transform: "translate(-50%, -50%)", width: 8, height: 8, borderRadius: "50%", background: "#ffffff" }} />}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 500, color: "#8e8e93", marginBottom: 32, padding: "0 2px" }}>
-                  <span>{formatTime(currentTime)}</span><span>-{formatTime(duration - currentTime)}</span>
+                {/* DRAGGABLE PROGRESS BAR (SCRUBBING FIXED) */}
+                <div style={{ display: "flex", flexDirection: "column", marginBottom: 32 }}>
+                  <input 
+                    type="range"
+                    min="0"
+                    max={duration || 100}
+                    value={currentTime}
+                    onMouseDown={() => setIsScrubbing(true)}
+                    onMouseUp={() => setIsScrubbing(false)}
+                    onTouchStart={() => setIsScrubbing(true)}
+                    onTouchEnd={() => setIsScrubbing(false)}
+                    onChange={(e) => {
+                      const newTime = parseFloat(e.target.value);
+                      setCurrentTime(newTime);
+                      if (audioRef.current) {
+                        audioRef.current.currentTime = newTime;
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      marginBottom: 10,
+                      background: `linear-gradient(to right, #fc3c44 ${progress}%, rgba(255,255,255,0.15) ${progress}%)`
+                    }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.5)", padding: "0 2px" }}>
+                    <span>{formatTime(currentTime)}</span>
+                    <span>-{formatTime(duration - currentTime)}</span>
+                  </div>
                 </div>
 
                 {/* Controls */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around", marginBottom: 28 }}>
-                  <button onClick={() => setShuffle((s) => !s)} className="icon-btn" style={{ background: "none", border: "none", cursor: "pointer", color: shuffle ? "#fc3c44" : "#8e8e93" }}>
+                  <button onClick={() => setShuffle((s) => !s)} className="icon-btn" style={{ background: "none", border: "none", cursor: "pointer", color: shuffle ? "#fc3c44" : "rgba(255,255,255,0.4)" }}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                       <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
                       <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
@@ -476,7 +670,7 @@
                       <polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" strokeWidth="2.5" fill="none"/>
                     </svg>
                   </button>
-                  <button onClick={togglePlay} className="icon-btn" style={{ width: 68, height: 68, borderRadius: "50%", background: "#ffffff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#000000", boxShadow: "0 4px 12px rgba(255,255,255,0.15)" }}>
+                  <button onClick={togglePlay} className="icon-btn" style={{ width: 68, height: 68, borderRadius: "50%", background: "#ffffff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#000000", boxShadow: "0 8px 24px rgba(255,255,255,0.25)" }}>
                     {playing ? (
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
                     ) : (
@@ -488,7 +682,7 @@
                       <polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2.5" fill="none"/>
                     </svg>
                   </button>
-                  <button onClick={() => setRepeat((r) => !r)} className="icon-btn" style={{ background: "none", border: "none", cursor: "pointer", color: repeat ? "#fc3c44" : "#8e8e93" }}>
+                  <button onClick={() => setRepeat((r) => !r)} className="icon-btn" style={{ background: "none", border: "none", cursor: "pointer", color: repeat ? "#fc3c44" : "rgba(255,255,255,0.4)" }}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                       <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
                       <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
@@ -496,11 +690,22 @@
                   </button>
                 </div>
 
-                {/* Volume slider */}
+                {/* VOLUME CONTROLLER (FIXED) */}
                 <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "0 8px" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
-                  <input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); if (audioRef.current) audioRef.current.volume = v; }} style={{ flex: 1, height: 3 }} />
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="1" 
+                    step="0.01" 
+                    value={volume} 
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))} 
+                    style={{ 
+                      flex: 1, 
+                      background: `linear-gradient(to right, #fc3c44 ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)` 
+                    }} 
+                  />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                 </div>
               </div>
             )}
@@ -513,50 +718,51 @@
                   onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => fileInputRef.current?.click()}
-                  style={{ border: "1.5px dashed rgba(255,255,255,0.15)", borderRadius: 16, padding: "24px", textAlign: "center", cursor: "pointer", marginBottom: 20, background: "rgba(255, 255, 255, 0.03)", transition: "border 0.2s" }}
+                  style={{ border: "2px dashed rgba(255,255,255,0.15)", borderRadius: 20, padding: "28px", textAlign: "center", cursor: "pointer", marginBottom: 20, background: "rgba(255, 255, 255, 0.02)", backdropFilter: "blur(20px)", transition: "border 0.2s" }}
                   onMouseEnter={(e) => e.currentTarget.style.borderColor = "#fc3c44"}
                   onMouseLeave={(e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"}
                 >
-                  <div style={{ fontSize: 24, marginBottom: 6, color: "#fc3c44" }}>＋</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>Musik hinzufügen</div>
-                  <div style={{ fontSize: 12, color: "#8e8e93", marginTop: 4 }}>Drag-and-Drop oder Klicken · MP3, WAV, M4A</div>
+                  <div style={{ fontSize: 26, marginBottom: 6, color: "#fc3c44" }}>＋</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#ffffff" }}>Musik hinzufügen</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Dateien reinziehen oder klicken (Kein Autostart)</div>
                 </div>
 
                 {importedMeta && (
-                  <div style={{ background: "rgba(252, 60, 68, 0.1)", border: "1px solid rgba(252, 60, 68, 0.2)", borderRadius: 16, padding: "16px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div className="liquid-glass" style={{ padding: "16px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#ffffff", marginBottom: 2 }}>Playlist importiert</div>
-                      <div style={{ fontSize: 12, color: "#8e8e93" }}>{importedMeta.length} Lieder bereit zum Abgleich</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#ffffff" }}>Playlist importiert</div>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{importedMeta.length} Lieder abgleichen</div>
                     </div>
                     <button onClick={() => mp3BatchInputRef.current?.click()} style={{ background: "#fc3c44", border: "none", borderRadius: 18, color: "#fff", cursor: "pointer", padding: "8px 16px", fontSize: 12, fontWeight: 700 }}>Musik laden</button>
                   </div>
                 )}
 
                 {tracks.length > 0 ? (
-                  <div style={{ background: "rgba(28, 28, 30, 0.6)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.06)", overflow: "hidden", backdropFilter: "blur(30px)" }}>
-                    <div style={{ padding: "14px 18px", fontSize: 12, fontWeight: 700, color: "#8e8e93", textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                      {tracks.length} Titel (Zieh am Symbol ☰ zum Sortieren)
+                  <div className="liquid-glass" style={{ overflow: "hidden" }}>
+                    <div style={{ padding: "14px 18px", fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,0.08)", letterSpacing: "0.5px" }}>
+                      {tracks.length} Titel · Sortieren: An ☰ ziehen & loslassen
                     </div>
                     <div style={{ maxHeight: 420, overflowY: "auto" }}>
                       {tracks.map((t, i) => (
                         <div 
                           key={t.id} 
                           className={`track-row ${draggedIdx === i ? 'dragging' : ''}`}
-                          draggable
+                          draggable="true"
                           onDragStart={(e) => handleDragStart(e, i)}
-                          onDragOver={(e) => handleDragOver(e, i)}
-                          onDragEnd={handleDragEnd}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleDrop(e, i)}
+                          onDragEnd={() => setDraggedIdx(null)}
                           onClick={() => { playTrack(i); setView("player"); }}
                           style={{ display: "flex", alignItems: "center", padding: "12px 16px", gap: 14, cursor: "pointer", background: i === currentIdx ? "rgba(252, 60, 68, 0.08)" : "transparent", borderBottom: i < tracks.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
 
                           {/* Cover Thumbnail */}
-                          <div style={{ width: 44, height: 44, borderRadius: 8, background: "#2c2c2e", flexShrink: 0, overflow: "hidden", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.05)" }}>
+                          <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(255,255,255,0.05)", flexShrink: 0, overflow: "hidden", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.08)" }}>
                             {t.art ? <img src={t.art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <MusicNote />}
                             <div className="art-overlay" onClick={(e) => openArtPicker(i, e)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </div>
                             {i === currentIdx && playing && (
-                              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <Bars n={3} size="sm" />
                               </div>
                             )}
@@ -564,17 +770,17 @@
 
                           {/* Details */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: i === currentIdx ? 600 : 500, color: i === currentIdx ? "#fc3c44" : "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</div>
-                            <div style={{ fontSize: 12, color: "#8e8e93", marginTop: 2 }}>{t.art ? "Album-Artwork" : "Kein Artwork"}</div>
+                            <div style={{ fontSize: 14, fontWeight: i === currentIdx ? 700 : 600, color: i === currentIdx ? "#fc3c44" : "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</div>
+                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{t.art ? "Custom Cover" : "Kein Artwork"}</div>
                           </div>
 
-                          {/* iOS Sort Symbol & Löschen */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 12 }} onClick={(e) => e.stopPropagation()}>
-                            <button onClick={(e) => removeTrack(i, e)} className="icon-btn" style={{ background: "none", border: "none", cursor: "pointer", color: "#8e8e93", fontSize: 18, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}
+                          {/* iOS Sort Handle & Delete */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 14 }} onClick={(e) => e.stopPropagation()}>
+                            <button onClick={(e) => removeTrack(i, e)} className="icon-btn" style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", fontSize: 18, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}
                               onMouseEnter={(e) => e.currentTarget.style.color = "#fc3c44"}
-                              onMouseLeave={(e) => e.currentTarget.style.color = "#8e8e93"}>×</button>
+                              onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.3)"}>×</button>
                             
-                            <div style={{ cursor: "grab", display: "flex", alignItems: "center", padding: "4px" }} title="Ziehen zum Sortieren">
+                            <div style={{ cursor: "grab", display: "flex", alignItems: "center", padding: "4px" }} title="Greifen zum Sortieren">
                               <DragIcon />
                             </div>
                           </div>
@@ -583,15 +789,90 @@
                     </div>
                   </div>
                 ) : (
-                  <div style={{ textAlign: "center", padding: "48px 20px", color: "#8e8e93", fontSize: 14 }}>
-                    Keine Lieder geladen · Ziehe Songs oder klicke oben, um zu starten.
+                  <div style={{ textAlign: "center", padding: "48px 20px", color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: 500 }}>
+                    Keine Lieder geladen · Ziehe Songs in die Box, um zu starten.
                   </div>
                 )}
               </div>
             )}
 
-            <div style={{ textAlign: "center", marginTop: 28, fontSize: 11, color: "#48484a", fontWeight: 500 }}>
-              Kompatibel mit iOS Sperrbildschirm & Media Session Control
+            {/* SETTINGS VIEW (NEW WITH REAL AUDIO EQUALIZER) */}
+            {view === "settings" && (
+              <div className="liquid-glass" style={{ padding: "32px 24px" }}>
+                <h3 style={{ fontSize: 20, fontWeight: 800, marginBottom: 12, color: "#ffffff", letterSpacing: "-0.5px" }}>Equalizer</h3>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 24 }}>Optimiert den Klang in Echtzeit mit der Web Audio Engine.</p>
+
+                {/* Presets */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 28 }}>
+                  {[
+                    { name: "Flat", values: [0, 0, 0] },
+                    { name: "Bass Booster", values: [8, 1, -2] },
+                    { name: "Vocal Booster", values: [-3, 6, 3] },
+                    { name: "Electronic", values: [5, -1, 4] }
+                  ].map((preset) => (
+                    <button
+                      key={preset.name}
+                      onClick={() => {
+                        initAudioContext();
+                        setEqBass(preset.values[0]);
+                        setEqMid(preset.values[1]);
+                        setEqTreble(preset.values[2]);
+                        showToast(`${preset.name} geladen`);
+                      }}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.05)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 12,
+                        color: "#fff",
+                        padding: "10px",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.2s"
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = "rgba(255, 255, 255, 0.12)"}
+                      onMouseLeave={(e) => e.target.style.background = "rgba(255, 255, 255, 0.05)"}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Sliders */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                  {[
+                    { label: "Bass (150Hz)", val: eqBass, set: setEqBass },
+                    { label: "Mitten (1kHz)", val: eqMid, set: setEqMid },
+                    { label: "Höhen (4kHz)", val: eqTreble, set: setEqTreble }
+                  ].map((band, idx) => (
+                    <div key={idx}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 8, fontWeight: 600 }}>
+                        <span>{band.label}</span>
+                        <span style={{ color: "#fc3c44", fontWeight: 800 }}>{band.val > 0 ? `+${band.val}` : band.val} dB</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-12"
+                        max="12"
+                        step="1"
+                        value={band.val}
+                        onChange={(e) => {
+                          initAudioContext();
+                          band.set(parseInt(e.target.value));
+                        }}
+                        style={{
+                          width: "100%",
+                          background: `linear-gradient(to right, #fc3c44 ${((band.val + 12) / 24) * 100}%, rgba(255,255,255,0.15) ${((band.val + 12) / 24) * 100}%)`
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ textAlign: "center", marginTop: 28, fontSize: 11, color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>
+              Liquid Glass Player Engine v2.0
             </div>
           </div>
         </div>
