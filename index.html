@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Liquid Glass Music Player</title>
+  <title>Minimal Music Player</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
     
     * { 
       box-sizing: border-box; 
@@ -16,8 +16,9 @@
       padding: 0; 
     }
     
+    /* OLED Schwarz spart auf Handys extrem Akku */
     html, body { 
-      background: #050505; 
+      background: #000000; 
       min-height: 100vh; 
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       color: #ffffff;
@@ -25,103 +26,62 @@
       overflow-x: hidden;
     }
 
-    /* HIGHLY OPTIMIZED LIQUID GRADIENT (Akkuschonend & Kalt) */
-    .glass-bg-blobs {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      z-index: -1;
-      background: 
-        radial-gradient(circle at 15% 15%, rgba(255, 45, 85, 0.18) 0%, transparent 45%),
-        radial-gradient(circle at 85% 85%, rgba(0, 122, 255, 0.18) 0%, transparent 45%),
-        radial-gradient(circle at 50% 50%, rgba(155, 0, 232, 0.12) 0%, transparent 55%),
-        #030303;
-      will-change: transform;
-      transform: translate3d(0,0,0);
-    }
-
-    /* Liquid Glass Card */
-    .liquid-glass {
-      background: rgba(255, 255, 255, 0.04);
-      backdrop-filter: blur(35px) saturate(210%);
-      -webkit-backdrop-filter: blur(35px) saturate(210%);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 
-        0 30px 70px rgba(0, 0, 0, 0.6), 
-        inset 0 1px 2px rgba(255, 255, 255, 0.2);
-      border-radius: 32px;
-      will-change: transform;
+    /* Schlichte, flache Card ohne Blur-Effekte */
+    .flat-card {
+      background: #121212;
+      border: 1px solid #222222;
+      border-radius: 20px;
     }
     
-    @keyframes bar1 { from { height: 4px; } to { height: 22px; } }
-    @keyframes bar2 { from { height: 8px; } to { height: 16px; } }
-    @keyframes bar3 { from { height: 6px; } to { height: 24px; } }
-    @keyframes bar4 { from { height: 10px; } to { height: 14px; } }
-    
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #333333; border-radius: 2px; }
     
     .track-row {
-      transition: background 0.2s;
+      transition: background 0.1s;
       user-select: none;
       -webkit-user-select: none;
     }
-    .track-row:hover { 
-      background: rgba(255, 255, 255, 0.04) !important; 
+    .track-row:active { 
+      background: #1a1a1a !important; 
     }
     
     .icon-btn {
-      transition: transform 0.1s, opacity 0.2s;
-    }
-    .icon-btn:active {
-      transform: scale(0.9);
-    }
-    
-    .sort-arrow {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 10px;
-      width: 26px;
-      height: 24px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.15s;
     }
-    .sort-arrow:active {
-      background: #fc3c44;
-      color: #fff;
+    .icon-btn:active {
+      opacity: 0.6;
     }
     
-    /* Input Slider Optimization */
+    /* Flache Schieberegler ohne Animationen */
     input[type=range] { 
       -webkit-appearance: none;
       appearance: none;
-      height: 6px;
-      border-radius: 3px;
+      height: 4px;
+      border-radius: 2px;
       outline: none;
       cursor: pointer;
-      background: rgba(255, 255, 255, 0.15);
+      background: #333333;
     }
     
     input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       background: #ffffff;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
       cursor: pointer;
     }
   </style>
 </head>
 <body>
-
-  <div class="glass-bg-blobs"></div>
 
   <div id="root"></div>
 
@@ -142,21 +102,6 @@
       </svg>
     );
 
-    const Bars = ({ n = 4, size = "lg" }) => {
-      const widths = size === "sm" ? 2 : 3;
-      const containerH = size === "sm" ? 12 : 24;
-      return (
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: containerH }}>
-          {Array.from({ length: n }).map((_, i) => (
-            <div key={i} style={{
-              width: widths, borderRadius: 1, background: "#fc3c44",
-              animation: `bar${(i % 4) + 1} ${0.5 + i * 0.12}s ease-in-out infinite alternate`,
-            }} />
-          ))}
-        </div>
-      );
-    };
-
     function MusicPlayer() {
       const [tracks, setTracks] = useState([]);
       const [currentIdx, setCurrentIdx] = useState(null);
@@ -166,105 +111,28 @@
       const [volume, setVolume] = useState(0.8);
       const [repeat, setRepeat] = useState(false);
       const [shuffle, setShuffle] = useState(false);
-      const [artEditIdx, setArtEditIdx] = useState(null);
       const [view, setView] = useState("player");
       const [toast, setToast] = useState(null);
-      const [importedMeta, setImportedMeta] = useState(null);
-      
       const [isScrubbing, setIsScrubbing] = useState(false);
-
-      // Equalizer Modus Switch für Sperrbildschirm-Stabilität
-      const [useEqualizer, setUseEqualizer] = useState(false);
-      const [eqBass, setEqBass] = useState(0);
-      const [eqMid, setEqMid] = useState(0);
-      const [eqTreble, setEqTreble] = useState(0);
 
       const audioRef = useRef(null);
       const fileInputRef = useRef(null);
       const artInputRef = useRef(null);
-      const playlistInputRef = useRef(null);
-      const mp3BatchInputRef = useRef(null);
-
-      // Web Audio API References
-      const audioCtxRef = useRef(null);
-      const sourceRef = useRef(null);
-      const filtersRef = useRef([]); 
-      const gainNodeRef = useRef(null);
 
       const currentTrack = currentIdx !== null ? tracks[currentIdx] : null;
 
       const showToast = (msg) => {
         setToast(msg);
-        setTimeout(() => setToast(null), 2500);
+        setTimeout(() => setToast(null), 2000);
       };
 
+      // Zuverlässiger m4a Support im Dateiwähler
       const isAudioFile = (file) => {
-        return file.type.includes("audio") || /\.(mp3|wav|ogg|m4a|flac|aac|opus)$/i.test(file.name);
-      };
-
-      // WEB AUDIO EQUALIZER INITIALISIERUNG (Wird nur geladen, wenn "useEqualizer" aktiv ist!)
-      const initAudioContext = () => {
-        if (!useEqualizer) return;
-        if (audioCtxRef.current || !audioRef.current) return;
-        try {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          const ctx = new AudioContext();
-          audioCtxRef.current = ctx;
-
-          const source = ctx.createMediaElementSource(audioRef.current);
-          sourceRef.current = source;
-
-          const bass = ctx.createBiquadFilter();
-          bass.type = "lowshelf";
-          bass.frequency.setValueAtTime(150, ctx.currentTime);
-          bass.gain.setValueAtTime(eqBass, ctx.currentTime);
-
-          const mid = ctx.createBiquadFilter();
-          mid.type = "peaking";
-          mid.frequency.setValueAtTime(1000, ctx.currentTime);
-          mid.Q.setValueAtTime(1, ctx.currentTime);
-          mid.gain.setValueAtTime(eqMid, ctx.currentTime);
-
-          const treble = ctx.createBiquadFilter();
-          treble.type = "highshelf";
-          treble.frequency.setValueAtTime(4000, ctx.currentTime);
-          treble.gain.setValueAtTime(eqTreble, ctx.currentTime);
-
-          const gainNode = ctx.createGain();
-          gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-          gainNodeRef.current = gainNode;
-
-          source.connect(bass);
-          bass.connect(mid);
-          mid.connect(treble);
-          treble.connect(gainNode);
-          gainNode.connect(ctx.destination);
-
-          filtersRef.current = [bass, mid, treble];
-          audioRef.current.volume = 1; 
-        } catch (e) {
-          console.error("Web Audio API Error", e);
-        }
-      };
-
-      // Equalizer Filter Live-Updates
-      useEffect(() => {
-        if (useEqualizer && filtersRef.current.length === 3 && audioCtxRef.current) {
-          const ctx = audioCtxRef.current;
-          filtersRef.current[0].gain.setValueAtTime(eqBass, ctx.currentTime);
-          filtersRef.current[1].gain.setValueAtTime(eqMid, ctx.currentTime);
-          filtersRef.current[2].gain.setValueAtTime(eqTreble, ctx.currentTime);
-        }
-      }, [eqBass, eqMid, eqTreble, useEqualizer]);
-
-      // Lautstärke Live-Update (Unterstützt beide Modi!)
-      const handleVolumeChange = (v) => {
-        setVolume(v);
-        if (useEqualizer && gainNodeRef.current && audioCtxRef.current) {
-          gainNodeRef.current.gain.setValueAtTime(v, audioCtxRef.current.currentTime);
-        } else if (audioRef.current) {
-          audioRef.current.volume = v; // Direkte Hardware-Lautstärke für Sperrbildschirm-Modus
-        }
+        return file.type.includes("audio") || 
+               file.type === "video/mp4" || 
+               file.type === "audio/mp4" ||
+               file.type === "audio/x-m4a" ||
+               /\.(mp3|wav|ogg|m4a|mp4|flac|aac|opus)$/i.test(file.name);
       };
 
       const playTrack = useCallback((idx, trackList) => {
@@ -272,22 +140,13 @@
         const track = list[idx];
         if (!track || !audioRef.current) return;
         
-        if (useEqualizer) {
-          initAudioContext();
-        }
-        
         audioRef.current.src = track.url;
+        audioRef.current.volume = volume;
         audioRef.current.load();
-        
-        // Native Lautstärke anwenden, falls EQ aus ist
-        if (!useEqualizer) {
-          audioRef.current.volume = volume;
-        }
-
         audioRef.current.play().catch(() => {});
         setCurrentIdx(idx);
         setPlaying(true);
-      }, [tracks, useEqualizer, eqBass, eqMid, eqTreble, volume]);
+      }, [tracks, volume]);
 
       const goNext = useCallback(() => {
         if (!tracks.length) return;
@@ -309,7 +168,6 @@
 
       const togglePlay = useCallback(() => {
         if (!audioRef.current || !currentTrack) return;
-        if (useEqualizer) initAudioContext();
         if (playing) { 
           audioRef.current.pause(); 
           setPlaying(false); 
@@ -317,9 +175,9 @@
           audioRef.current.play().catch(() => {}); 
           setPlaying(true); 
         }
-      }, [playing, currentTrack, useEqualizer]);
+      }, [playing, currentTrack]);
 
-      // MOBILE SORTIERUNG: Absolut zuverlässiges Verschieben der Tracks
+      // Simple Sortier-Funktion (CPU-schonender Ersatz für Drag & Drop)
       const moveTrack = (index, direction) => {
         if (index + direction < 0 || index + direction >= tracks.length) return;
         const updated = [...tracks];
@@ -327,7 +185,6 @@
         updated[index] = updated[index + direction];
         updated[index + direction] = temp;
 
-        // Passt den aktuell spielenden Song-Index an, damit der Song nicht springt
         if (currentIdx === index) {
           setCurrentIdx(index + direction);
         } else if (currentIdx === index + direction) {
@@ -336,12 +193,12 @@
         setTracks(updated);
       };
 
-      // iOS Lockscreen integration (Wird bei jedem Track-Wechsel erneuert)
+      // Mediasession-API für nativen Sperrbildschirm-Support
       useEffect(() => {
         if (!("mediaSession" in navigator) || !currentTrack) return;
         navigator.mediaSession.metadata = new MediaMetadata({
           title: currentTrack.name,
-          artist: "Liquid Player",
+          artist: "Offline Player",
           artwork: currentTrack.art ? [{ src: currentTrack.art, sizes: "300x300", type: "image/jpeg" }] : [],
         });
         navigator.mediaSession.setActionHandler("play", () => { audioRef.current?.play(); setPlaying(true); });
@@ -360,6 +217,7 @@
         };
         const onDur = () => setDuration(audio.duration);
         const onEnded = () => { if (repeat) { audio.currentTime = 0; audio.play(); } else goNext(); };
+        
         audio.addEventListener("timeupdate", onTime);
         audio.addEventListener("loadedmetadata", onDur);
         audio.addEventListener("ended", onEnded);
@@ -385,27 +243,20 @@
           }));
           return [...prev, ...newTracks];
         });
-        showToast(`${audioFiles.length} Titel importiert (Nicht gestartet)`);
+        showToast(`${audioFiles.length} Titel geladen`);
       };
 
       const handleArtFile = (e) => {
         const file = e.target.files?.[0];
-        if (!file || artEditIdx === null) return;
+        if (!file || currentIdx === null) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
           setTracks((prev) => prev.map((t, i) =>
-            i === artEditIdx ? { ...t, art: ev.target.result } : t
+            i === currentIdx ? { ...t, art: ev.target.result } : t
           ));
         };
         reader.readAsDataURL(file);
         e.target.value = "";
-        setArtEditIdx(null);
-      };
-
-      const openArtPicker = (idx, e) => {
-        e.stopPropagation();
-        setArtEditIdx(idx);
-        setTimeout(() => artInputRef.current?.click(), 50);
       };
 
       const removeTrack = (idx, e) => {
@@ -423,127 +274,69 @@
         });
       };
 
-      const exportPlaylist = () => {
-        if (!tracks.length) return;
-        const data = {
-          version: 1,
-          tracks: tracks.map((t) => ({ name: t.name, art: t.art })),
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = "playlist.json"; a.click();
-        URL.revokeObjectURL(url);
-        showToast("Playlist exportiert");
-      };
-
-      const handlePlaylistImport = (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          try {
-            const data = JSON.parse(ev.target.result);
-            if (!data.tracks) throw new Error();
-            setImportedMeta(data.tracks);
-            showToast(`${data.tracks.length} Titel geladen`);
-          } catch { showToast("Ungültige Playlist-Datei"); }
-        };
-        reader.readAsText(file);
-        e.target.value = "";
-      };
-
-      const handleBatchMP3s = (e) => {
-        const files = Array.from(e.target.files).filter(isAudioFile);
-        if (!files.length) return;
-        if (importedMeta) {
-          const newTracks = importedMeta.map((meta, i) => {
-            const match = files.find((f) => f.name.replace(/\.[^/.]+$/, "") === meta.name);
-            if (!match) return null;
-            return { 
-              id: `track-${Date.now()}-${i}`,
-              name: meta.name, 
-              url: URL.createObjectURL(match), 
-              art: meta.art || null 
-            };
-          }).filter(Boolean);
-          setTracks(newTracks);
-          setImportedMeta(null);
-          showToast(`${newTracks.length} Titel verknüpft!`);
-        }
-        e.target.value = "";
-      };
-
       const progress = duration ? (currentTime / duration) * 100 : 0;
 
       return (
-        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 16px 80px" }}>
-          <div style={{ width: "100%", maxWidth: 410 }}>
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 16px 60px" }}>
+          <div style={{ width: "100%", maxWidth: 390 }}>
 
             <audio ref={audioRef} preload="auto" playsInline />
-            <input ref={fileInputRef} type="file" accept="audio/*" multiple style={{ display: "none" }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
+            <input ref={fileInputRef} type="file" accept="audio/*, .m4a, .mp4, audio/mp4, audio/x-m4a" multiple style={{ display: "none" }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
             <input ref={artInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleArtFile} />
-            <input ref={playlistInputRef} type="file" accept=".json" style={{ display: "none" }} onChange={handlePlaylistImport} />
-            <input ref={mp3BatchInputRef} type="file" accept="audio/*" multiple style={{ display: "none" }} onChange={handleBatchMP3s} />
 
             {toast && (
-              <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", background: "rgba(255, 255, 255, 0.12)", backdropFilter: "blur(25px)", color: "#fff", padding: "12px 24px", borderRadius: 24, fontSize: 13, fontWeight: 600, zIndex: 100, border: "1px solid rgba(255,255,255,0.18)" }}>
+              <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "#1a1a1a", border: "1px solid #333333", color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 13, zIndex: 100 }}>
                 {toast}
               </div>
             )}
 
             {/* Header */}
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 24, padding: "0 8px" }}>
-              <div style={{ fontSize: 32, fontWeight: 800, color: "#ffffff", letterSpacing: "-1px" }}>Mediathek</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => playlistInputRef.current?.click()} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 20, color: "#fc3c44", cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>Import</button>
-                <button onClick={exportPlaylist} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 20, color: "#fc3c44", cursor: "pointer", padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>Export</button>
-              </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <h1 style={{ fontSize: 24, fontWeight: 800 }}>Mediathek</h1>
+              <button onClick={() => fileInputRef.current?.click()} style={{ background: "#fc3c44", border: "none", borderRadius: 12, color: "#fff", padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                + Musik laden
+              </button>
             </div>
 
-            {/* Tabs */}
-            <div style={{ display: "flex", background: "rgba(255, 255, 255, 0.08)", borderRadius: 14, padding: 3, marginBottom: 24 }}>
-              {["player", "playlist", "settings"].map((v) => (
-                <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "8px 0", borderRadius: 11, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: view === v ? "rgba(255,255,255,0.12)" : "transparent", color: view === v ? "#ffffff" : "rgba(255,255,255,0.5)" }}>
-                  {v === "player" ? "Jetzt läuft" : v === "playlist" ? `Titelliste (${tracks.length})` : "Settings"}
+            {/* Simple Segmented Tabs */}
+            <div style={{ display: "flex", background: "#111111", borderRadius: 10, padding: 3, marginBottom: 20, border: "1px solid #222222" }}>
+              {["player", "playlist"].map((v) => (
+                <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: view === v ? "#222222" : "transparent", color: view === v ? "#ffffff" : "#666666" }}>
+                  {v === "player" ? "Jetzt läuft" : `Titelliste (${tracks.length})`}
                 </button>
               ))}
             </div>
 
             {/* PLAYER VIEW */}
             {view === "player" && (
-              <div className="liquid-glass" style={{ padding: "32px 24px" }}>
+              <div className="flat-card" style={{ padding: "24px" }}>
                 
-                {/* Artwork */}
-                <div style={{ width: "100%", aspectRatio: "1", borderRadius: 24, marginBottom: 32, overflow: "hidden", position: "relative", background: "rgba(255,255,255,0.02)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.1)" }}>
+                {/* Minimal Cover Art (Kein Animations-Markup) */}
+                <div style={{ width: "100%", aspectRatio: "1", borderRadius: 12, marginBottom: 24, overflow: "hidden", background: "#181818", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #222222", position: "relative" }}>
                   {currentTrack?.art ? (
                     <img src={currentTrack.art} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                      <div style={{ width: 60, height: 60, borderRadius: "50%", background: playing ? "#fc3c44" : "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <MusicNote />
-                      </div>
-                    </div>
+                    <MusicNote />
                   )}
                   {currentTrack && (
-                    <button onClick={(e) => openArtPicker(currentIdx, e)} style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, color: "#ffffff", padding: "6px 12px", fontSize: 11, fontWeight: 600 }}>
-                      {currentTrack.art ? "Ändern" : "+ Cover"}
+                    <button onClick={() => artInputRef.current?.click()} style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.7)", border: "1px solid #333", borderRadius: 8, color: "#fff", padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>
+                      Cover ändern
                     </button>
                   )}
                 </div>
 
                 {/* Track Info */}
-                <div style={{ marginBottom: 28, minHeight: 52 }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {currentTrack ? currentTrack.name : "Kein Titel geladen"}
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>
-                    {currentTrack ? `Song ${(currentIdx ?? 0) + 1} von ${tracks.length}` : "Füge Musik im Tab 'Titelliste' hinzu."}
+                  <div style={{ fontSize: 13, color: "#666666", marginTop: 4 }}>
+                    {currentTrack ? `Titel ${(currentIdx ?? 0) + 1} von ${tracks.length}` : "Füge Musik im Tab 'Titelliste' hinzu"}
                   </div>
                 </div>
 
-                {/* SCRUBBABLE SLIDER */}
-                <div style={{ display: "flex", flexDirection: "column", marginBottom: 32 }}>
+                {/* Slider (Optimiert für schnelles Rendering) */}
+                <div style={{ display: "flex", flexDirection: "column", marginBottom: 24 }}>
                   <input 
                     type="range"
                     min="0"
@@ -562,201 +355,107 @@
                     }}
                     style={{
                       width: "100%",
-                      marginBottom: 10,
-                      background: `linear-gradient(to right, #fc3c44 ${progress}%, rgba(255,255,255,0.15) ${progress}%)`
+                      marginBottom: 8,
+                      background: `linear-gradient(to right, #fc3c44 ${progress}%, #222 ${progress}%)`
                     }}
                   />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555" }}>
                     <span>{formatTime(currentTime)}</span>
                     <span>-{formatTime(duration - currentTime)}</span>
                   </div>
                 </div>
 
-                {/* Controls */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around", marginBottom: 28 }}>
-                  <button onClick={() => setShuffle((s) => !s)} className="icon-btn" style={{ background: "none", border: "none", color: shuffle ? "#fc3c44" : "rgba(255,255,255,0.4)" }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+                {/* Steuerungselemente */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                  <button onClick={() => setShuffle((s) => !s)} className="icon-btn" style={{ color: shuffle ? "#fc3c44" : "#444" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
                   </button>
-                  <button onClick={goPrev} className="icon-btn" style={{ background: "none", border: "none", color: "#ffffff" }}>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" strokeWidth="2.5"/></svg>
+                  
+                  <button onClick={goPrev} className="icon-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" strokeWidth="2.5"/></svg>
                   </button>
-                  <button onClick={togglePlay} className="icon-btn" style={{ width: 68, height: 68, borderRadius: "50%", background: "#ffffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#000000", boxShadow: "0 8px 24px rgba(255,255,255,0.2)" }}>
+                  
+                  <button onClick={togglePlay} className="icon-btn" style={{ width: 56, height: 56, borderRadius: "50%", background: "#ffffff", color: "#000000" }}>
                     {playing ? (
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
                     ) : (
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 3 }}><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     )}
                   </button>
-                  <button onClick={goNext} className="icon-btn" style={{ background: "none", border: "none", color: "#ffffff" }}>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2.5"/></svg>
+                  
+                  <button onClick={goNext} className="icon-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2.5"/></svg>
                   </button>
-                  <button onClick={() => setRepeat((r) => !r)} className="icon-btn" style={{ background: "none", border: "none", color: repeat ? "#fc3c44" : "rgba(255,255,255,0.4)" }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                  
+                  <button onClick={() => setRepeat((r) => !r)} className="icon-btn" style={{ color: repeat ? "#fc3c44" : "#444" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
                   </button>
                 </div>
 
-                {/* VOLUME CONTROLLER (REPARIERT) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
+                {/* Lautstärkeregler */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
                   <input 
                     type="range" 
                     min="0" 
                     max="1" 
-                    step="0.01" 
+                    step="0.05" 
                     value={volume} 
                     onChange={(e) => handleVolumeChange(parseFloat(e.target.value))} 
                     style={{ 
                       flex: 1, 
-                      background: `linear-gradient(to right, #fc3c44 ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)` 
+                      background: `linear-gradient(to right, #fc3c44 ${volume * 100}%, #222 ${volume * 100}%)` 
                     }} 
                   />
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2.5"><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                 </div>
               </div>
             )}
 
-            {/* PLAYLIST VIEW (Mit Touch-freundlichem Sortiersystem!) */}
+            {/* PLAYLIST VIEW */}
             {view === "playlist" && (
               <div>
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ border: "2px dashed rgba(255,255,255,0.15)", borderRadius: 20, padding: "24px", textAlign: "center", cursor: "pointer", marginBottom: 20, background: "rgba(255, 255, 255, 0.02)" }}
-                >
-                  <div style={{ fontSize: 22, color: "#fc3c44", marginBottom: 4 }}>＋</div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>Musik hinzufügen</div>
-                </div>
-
-                {importedMeta && (
-                  <div className="liquid-glass" style={{ padding: "16px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Lade die passenden MP3s für deine importierte Playlist.</div>
-                    <button onClick={() => mp3BatchInputRef.current?.click()} style={{ background: "#fc3c44", border: "none", borderRadius: 12, color: "#fff", padding: "8px 14px", fontSize: 11, fontWeight: 700 }}>MP3s wählen</button>
-                  </div>
-                )}
-
                 {tracks.length > 0 ? (
-                  <div className="liquid-glass" style={{ overflow: "hidden" }}>
-                    <div style={{ padding: "12px 16px", fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                      Playlist ({tracks.length} Songs)
-                    </div>
-                    <div style={{ maxHeight: 380, overflowY: "auto" }}>
+                  <div className="flat-card" style={{ overflow: "hidden" }}>
+                    <div style={{ maxHeight: 420, overflowY: "auto" }}>
                       {tracks.map((t, i) => (
                         <div 
                           key={t.id} 
                           onClick={() => { playTrack(i); setView("player"); }}
-                          style={{ display: "flex", alignItems: "center", padding: "12px 16px", gap: 12, background: i === currentIdx ? "rgba(252, 60, 68, 0.08)" : "transparent", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                          style={{ display: "flex", alignItems: "center", padding: "10px 14px", gap: 12, background: i === currentIdx ? "#1a1a1a" : "transparent", borderBottom: "1px solid #1a1a1a" }}>
 
                           {/* Cover Thumbnail */}
-                          <div style={{ width: 40, height: 40, borderRadius: 8, background: "rgba(255,255,255,0.05)", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                            {t.art ? <img src={t.art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <MusicNote />}
+                          <div style={{ width: 36, height: 36, borderRadius: 6, background: "#181818", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #222" }}>
+                            {t.art ? <img src={t.art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ transform: "scale(0.7)" }}><MusicNote /></div>}
                           </div>
 
-                          {/* Details */}
+                          {/* Titel */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: i === currentIdx ? "#fc3c44" : "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</div>
+                            <div style={{ fontSize: 13, fontWeight: i === currentIdx ? "800" : "400", color: i === currentIdx ? "#fc3c44" : "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {t.name}
+                            </div>
                           </div>
 
-                          {/* MOBILE NAVIGATION & DELETE */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                            {/* Pfeile zum Sortieren (100% zuverlässig auf iOS & Android!) */}
-                            <button onClick={() => moveTrack(i, -1)} className="sort-arrow" style={{ opacity: i === 0 ? 0.2 : 1 }} disabled={i === 0}>▲</button>
-                            <button onClick={() => moveTrack(i, 1)} className="sort-arrow" style={{ opacity: i === tracks.length - 1 ? 0.2 : 1 }} disabled={i === tracks.length - 1}>▼</button>
-                            
-                            <button onClick={(e) => removeTrack(i, e)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 18, marginLeft: 6, width: 24, height: 24 }}>×</button>
+                          {/* Manuelles Sortieren per Klick (100% akkuschonender als Drag & Drop!) */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => moveTrack(i, -1)} style={{ background: "#222", border: "none", color: "#666", width: 22, height: 22, borderRadius: 4, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }} disabled={i === 0}>▲</button>
+                            <button onClick={() => moveTrack(i, 1)} style={{ background: "#222", border: "none", color: "#666", width: 22, height: 22, borderRadius: 4, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }} disabled={i === tracks.length - 1}>▼</button>
+                            <button onClick={(e) => removeTrack(i, e)} style={{ background: "none", border: "none", color: "#666", fontSize: 18, cursor: "pointer", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div style={{ textAlign: "center", padding: "40px", color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Keine Musik geladen.</div>
-                )}
-              </div>
-            )}
-
-            {/* SETTINGS & EQUALIZER */}
-            {view === "settings" && (
-              <div className="liquid-glass" style={{ padding: "24px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                  <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 800 }}>Equalizer Engine</h3>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
-                      Deaktivieren für stabilen Sperrbildschirm auf iOS/Android
-                    </div>
-                  </div>
-                  <input 
-                    type="checkbox" 
-                    checked={useEqualizer} 
-                    onChange={(e) => {
-                      setUseEqualizer(e.target.checked);
-                      showToast(e.target.checked ? "EQ Aktiviert · Audio-Engine aktiv" : "EQ Deaktiviert · Sperrbildschirm-Modus");
-                    }}
-                    style={{ width: 44, height: 24, accentColor: "#fc3c44", cursor: "pointer" }}
-                  />
-                </div>
-
-                {useEqualizer ? (
-                  <div>
-                    {/* Presets */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
-                      {[
-                        { name: "Flat", values: [0, 0, 0] },
-                        { name: "Bass Booster", values: [8, 1, -2] },
-                        { name: "Vocal Booster", values: [-3, 6, 3] },
-                        { name: "Electronic", values: [5, -1, 4] }
-                      ].map((preset) => (
-                        <button
-                          key={preset.name}
-                          onClick={() => {
-                            setEqBass(preset.values[0]);
-                            setEqMid(preset.values[1]);
-                            setEqTreble(preset.values[2]);
-                            showToast(`${preset.name} geladen`);
-                          }}
-                          style={{ background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", padding: "8px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                        >
-                          {preset.name}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Sliders */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                      {[
-                        { label: "Bass (150Hz)", val: eqBass, set: setEqBass },
-                        { label: "Mitten (1kHz)", val: eqMid, set: setEqMid },
-                        { label: "Höhen (4kHz)", val: eqTreble, set: setEqTreble }
-                      ].map((band, idx) => (
-                        <div key={idx}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>
-                            <span>{band.label}</span>
-                            <span style={{ color: "#fc3c44", fontWeight: 700 }}>{band.val > 0 ? `+${band.val}` : band.val} dB</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="-12"
-                            max="12"
-                            step="1"
-                            value={band.val}
-                            onChange={(e) => band.set(parseInt(e.target.value))}
-                            style={{
-                              width: "100%",
-                              background: `linear-gradient(to right, #fc3c44 ${((band.val + 12) / 24) * 100}%, rgba(255,255,255,0.15) ${((band.val + 12) / 24) * 100}%)`
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 14, padding: "16px", textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 12 }}>
-                    Aktivieren, um den Klang anzupassen. Im deaktivierten Zustand läuft der Player absolut akkuschonend im Hintergrund weiter.
+                  <div style={{ textShadow: "none", textAlign: "center", padding: "40px", color: "#444", fontSize: 12 }}>
+                    Keine Lieder geladen. Klicke oben auf "+ Musik laden".
                   </div>
                 )}
               </div>
             )}
 
-            <div style={{ textAlign: "center", marginTop: 24, fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
-              Liquid Glass Player Engine v2.1 (Optimized for Mobile)
+            <div style={{ textAlign: "center", marginTop: 24, fontSize: 10, color: "#333", fontWeight: "600" }}>
+              Cold-Engine Player v3.0 (Zero-Animation Edition)
             </div>
           </div>
         </div>
