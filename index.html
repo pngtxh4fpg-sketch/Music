@@ -16,7 +16,6 @@
       padding: 0; 
     }
     
-    /* OLED Schwarz spart auf Handys extrem Akku */
     html, body { 
       background: #000000; 
       min-height: 100vh; 
@@ -26,7 +25,6 @@
       overflow-x: hidden;
     }
 
-    /* Schlichte, flache Card ohne Blur-Effekte */
     .flat-card {
       background: #121212;
       border: 1px solid #222222;
@@ -59,7 +57,6 @@
       opacity: 0.6;
     }
     
-    /* Flache Schieberegler ohne Animationen */
     input[type=range] { 
       -webkit-appearance: none;
       appearance: none;
@@ -115,9 +112,22 @@
       const [toast, setToast] = useState(null);
       const [isScrubbing, setIsScrubbing] = useState(false);
 
+      // Equalizer States & Web Audio API
+      const [useEqualizer, setUseEqualizer] = useState(false);
+      const [eqBass, setEqBass] = useState(0);
+      const [eqMid, setEqMid] = useState(0);
+      const [eqTreble, setEqTreble] = useState(0);
+
       const audioRef = useRef(null);
       const fileInputRef = useRef(null);
       const artInputRef = useRef(null);
+      const wakeLockRef = useRef(null);
+
+      // Web Audio Nodes
+      const audioCtxRef = useRef(null);
+      const sourceRef = useRef(null);
+      const filtersRef = useRef([]);
+      const gainNodeRef = useRef(null);
 
       const currentTrack = currentIdx !== null ? tracks[currentIdx] : null;
 
@@ -126,7 +136,98 @@
         setTimeout(() => setToast(null), 2000);
       };
 
-      // Zuverlässiger m4a Support im Dateiwähler
+      // Automatische Verhinderung des Standbys (Wake Lock API) für den EQ-Modus
+      const requestWakeLock = async () => {
+        if ('wakeLock' in navigator) {
+          try {
+            wakeLockRef.current = await navigator.wakeLock.request('screen');
+          } catch (err) {
+            console.warn("Wake Lock konnte nicht aktiviert werden.");
+          }
+        }
+      };
+
+      const releaseWakeLock = () => {
+        if (wakeLockRef.current) {
+          wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        }
+      };
+
+      // Initialisiert den Web Audio Context bei Bedarf
+      const initAudioContext = () => {
+        if (!useEqualizer) return;
+        if (audioCtxRef.current || !audioRef.current) return;
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          const ctx = new AudioContext();
+          audioCtxRef.current = ctx;
+
+          const source = ctx.createMediaElementSource(audioRef.current);
+          sourceRef.current = source;
+
+          const bass = ctx.createBiquadFilter();
+          bass.type = "lowshelf";
+          bass.frequency.setValueAtTime(150, ctx.currentTime);
+          bass.gain.setValueAtTime(eqBass, ctx.currentTime);
+
+          const mid = ctx.createBiquadFilter();
+          mid.type = "peaking";
+          mid.frequency.setValueAtTime(1000, ctx.currentTime);
+          mid.Q.setValueAtTime(1, ctx.currentTime);
+          mid.gain.setValueAtTime(eqMid, ctx.currentTime);
+
+          const treble = ctx.createBiquadFilter();
+          treble.type = "highshelf";
+          treble.frequency.setValueAtTime(4000, ctx.currentTime);
+          treble.gain.setValueAtTime(eqTreble, ctx.currentTime);
+
+          const gainNode = ctx.createGain();
+          gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+          gainNodeRef.current = gainNode;
+
+          source.connect(bass);
+          bass.connect(mid);
+          mid.connect(treble);
+          treble.connect(gainNode);
+          gainNode.connect(ctx.destination);
+
+          filtersRef.current = [bass, mid, treble];
+          audioRef.current.volume = 1; 
+        } catch (e) {
+          console.error("Audio API Fehler", e);
+        }
+      };
+
+      // Equalizer Filter-Werte live aktualisieren
+      useEffect(() => {
+        if (useEqualizer && filtersRef.current.length === 3 && audioCtxRef.current) {
+          const ctx = audioCtxRef.current;
+          filtersRef.current[0].gain.setValueAtTime(eqBass, ctx.currentTime);
+          filtersRef.current[1].gain.setValueAtTime(eqMid, ctx.currentTime);
+          filtersRef.current[2].gain.setValueAtTime(eqTreble, ctx.currentTime);
+        }
+      }, [eqBass, eqMid, eqTreble, useEqualizer]);
+
+      // Wake Lock steuern je nach EQ-Nutzung
+      useEffect(() => {
+        if (useEqualizer && playing) {
+          requestWakeLock();
+        } else {
+          releaseWakeLock();
+        }
+        return () => releaseWakeLock();
+      }, [useEqualizer, playing]);
+
+      const handleVolumeChange = (v) => {
+        setVolume(v);
+        if (useEqualizer && gainNodeRef.current && audioCtxRef.current) {
+          gainNodeRef.current.gain.setValueAtTime(v, audioCtxRef.current.currentTime);
+        } else if (audioRef.current) {
+          audioRef.current.volume = v;
+        }
+      };
+
       const isAudioFile = (file) => {
         return file.type.includes("audio") || 
                file.type === "video/mp4" || 
@@ -140,13 +241,19 @@
         const track = list[idx];
         if (!track || !audioRef.current) return;
         
+        if (useEqualizer) {
+          initAudioContext();
+        }
+        
         audioRef.current.src = track.url;
-        audioRef.current.volume = volume;
+        if (!useEqualizer) {
+          audioRef.current.volume = volume;
+        }
         audioRef.current.load();
         audioRef.current.play().catch(() => {});
         setCurrentIdx(idx);
         setPlaying(true);
-      }, [tracks, volume]);
+      }, [tracks, useEqualizer, volume]);
 
       const goNext = useCallback(() => {
         if (!tracks.length) return;
@@ -168,6 +275,7 @@
 
       const togglePlay = useCallback(() => {
         if (!audioRef.current || !currentTrack) return;
+        if (useEqualizer) initAudioContext();
         if (playing) { 
           audioRef.current.pause(); 
           setPlaying(false); 
@@ -175,9 +283,8 @@
           audioRef.current.play().catch(() => {}); 
           setPlaying(true); 
         }
-      }, [playing, currentTrack]);
+      }, [playing, currentTrack, useEqualizer]);
 
-      // Simple Sortier-Funktion (CPU-schonender Ersatz für Drag & Drop)
       const moveTrack = (index, direction) => {
         if (index + direction < 0 || index + direction >= tracks.length) return;
         const updated = [...tracks];
@@ -193,7 +300,6 @@
         setTracks(updated);
       };
 
-      // Mediasession-API für nativen Sperrbildschirm-Support
       useEffect(() => {
         if (!("mediaSession" in navigator) || !currentTrack) return;
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -298,11 +404,11 @@
               </button>
             </div>
 
-            {/* Simple Segmented Tabs */}
+            {/* Simple Tabs */}
             <div style={{ display: "flex", background: "#111111", borderRadius: 10, padding: 3, marginBottom: 20, border: "1px solid #222222" }}>
-              {["player", "playlist"].map((v) => (
+              {["player", "playlist", "equalizer"].map((v) => (
                 <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: view === v ? "#222222" : "transparent", color: view === v ? "#ffffff" : "#666666" }}>
-                  {v === "player" ? "Jetzt läuft" : `Titelliste (${tracks.length})`}
+                  {v === "player" ? "Jetzt läuft" : v === "playlist" ? `Titelliste` : "EQ-Tuning"}
                 </button>
               ))}
             </div>
@@ -311,7 +417,7 @@
             {view === "player" && (
               <div className="flat-card" style={{ padding: "24px" }}>
                 
-                {/* Minimal Cover Art (Kein Animations-Markup) */}
+                {/* Minimal Cover Art */}
                 <div style={{ width: "100%", aspectRatio: "1", borderRadius: 12, marginBottom: 24, overflow: "hidden", background: "#181818", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #222222", position: "relative" }}>
                   {currentTrack?.art ? (
                     <img src={currentTrack.art} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -335,7 +441,7 @@
                   </div>
                 </div>
 
-                {/* Slider (Optimiert für schnelles Rendering) */}
+                {/* Slider */}
                 <div style={{ display: "flex", flexDirection: "column", marginBottom: 24 }}>
                   <input 
                     type="range"
@@ -424,19 +530,16 @@
                           onClick={() => { playTrack(i); setView("player"); }}
                           style={{ display: "flex", alignItems: "center", padding: "10px 14px", gap: 12, background: i === currentIdx ? "#1a1a1a" : "transparent", borderBottom: "1px solid #1a1a1a" }}>
 
-                          {/* Cover Thumbnail */}
                           <div style={{ width: 36, height: 36, borderRadius: 6, background: "#181818", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #222" }}>
                             {t.art ? <img src={t.art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ transform: "scale(0.7)" }}><MusicNote /></div>}
                           </div>
 
-                          {/* Titel */}
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: i === currentIdx ? "800" : "400", color: i === currentIdx ? "#fc3c44" : "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                               {t.name}
                             </div>
                           </div>
 
-                          {/* Manuelles Sortieren per Klick (100% akkuschonender als Drag & Drop!) */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => moveTrack(i, -1)} style={{ background: "#222", border: "none", color: "#666", width: 22, height: 22, borderRadius: 4, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }} disabled={i === 0}>▲</button>
                             <button onClick={() => moveTrack(i, 1)} style={{ background: "#222", border: "none", color: "#666", width: 22, height: 22, borderRadius: 4, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }} disabled={i === tracks.length - 1}>▼</button>
@@ -454,8 +557,70 @@
               </div>
             )}
 
+            {/* EQUALIZER VIEW */}
+            {view === "equalizer" && (
+              <div className="flat-card" style={{ padding: "24px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800 }}>EQ Engine aktivieren</h3>
+                    <div style={{ fontSize: 11, color: "#666666", marginTop: 2 }}>
+                      Verhindert Standby, damit der Sound nicht abbricht.
+                    </div>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={useEqualizer} 
+                    onChange={(e) => {
+                      setUseEqualizer(e.target.checked);
+                      if (e.target.checked) {
+                        initAudioContext();
+                        showToast("EQ & Wake Lock Aktiviert");
+                      } else {
+                        releaseWakeLock();
+                        showToast("Sperrbildschirm-Modus Aktiv");
+                      }
+                    }}
+                    style={{ width: 40, height: 20, accentColor: "#fc3c44", cursor: "pointer" }}
+                  />
+                </div>
+
+                {useEqualizer ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    {[
+                      { label: "Bass (150Hz)", val: eqBass, set: setEqBass },
+                      { label: "Mitten (1kHz)", val: eqMid, set: setEqMid },
+                      { label: "Höhen (4kHz)", val: eqTreble, set: setEqTreble }
+                    ].map((band, idx) => (
+                      <div key={idx}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginBottom: 6 }}>
+                          <span>{band.label}</span>
+                          <span style={{ color: "#fc3c44", fontWeight: 700 }}>{band.val > 0 ? `+${band.val}` : band.val} dB</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-12"
+                          max="12"
+                          step="1"
+                          value={band.val}
+                          onChange={(e) => band.set(parseInt(e.target.value))}
+                          style={{
+                            width: "100%",
+                            background: `linear-gradient(to right, #fc3c44 ${((band.val + 12) / 24) * 100}%, #222 ${((band.val + 12) / 24) * 100}%)`
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ background: "#181818", border: "1px dashed #222", borderRadius: 10, padding: "16px", textAlign: "center", color: "#555", fontSize: 12 }}>
+                    Aktiviere den Schalter oben. Der Bildschirm bleibt dann gedimmt eingeschaltet, damit der EQ ohne Unterbrechung läuft.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ textAlign: "center", marginTop: 24, fontSize: 10, color: "#333", fontWeight: "600" }}>
-              Cold-Engine Player v3.0 (Zero-Animation Edition)
+              Cold-Engine Player v3.5 (OLED Optimization)
             </div>
           </div>
         </div>
