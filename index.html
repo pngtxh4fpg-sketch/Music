@@ -183,6 +183,7 @@ function MusicPlayer() {
             id: t.id, name: t.name,
             url: URL.createObjectURL(t.blob),
             art: t.art || null,
+            originalFilename: t.originalFilename || null,
           }));
           setTracks(loaded);
           if (s.currentTrackId) {
@@ -283,16 +284,17 @@ function MusicPlayer() {
     if (!audio.length) { showToast("Keine Audio-Dateien erkannt!"); return; }
 
     const newTracks = audio.map((f, i) => ({
-      id:   `t-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
-      name: f.name.replace(/\.[^/.]+$/, "").replace("_tuned", " 🔊"),
-      blob: f,
-      art:  null,
+      id:               `t-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
+      name:             f.name.replace(/\.[^/.]+$/, "").replace("_tuned", " 🔊"),
+      blob:             f,
+      art:              null,
+      originalFilename: f.name,
     }));
 
     await Promise.all(newTracks.map(t => dbPut('tracks', t))).catch(console.error);
     setTracks(prev => [
       ...prev,
-      ...newTracks.map(t => ({ id: t.id, name: t.name, url: URL.createObjectURL(t.blob), art: null })),
+      ...newTracks.map(t => ({ id: t.id, name: t.name, url: URL.createObjectURL(t.blob), art: null, originalFilename: t.originalFilename })),
     ]);
     showToast(`${audio.length} Titel geladen`);
   };
@@ -341,6 +343,8 @@ function MusicPlayer() {
   };
 
   // ─── Backup: Export ───────────────────────────────────────────────────────
+  // Lightweight JSON: covers als base64, keine Audiodaten.
+  // Audio-Dateien werden beim Import vom Nutzer separat bereitgestellt und per Dateiname zugeordnet.
   const exportBackup = async () => {
     if (!tracks.length) return;
     setIsExporting(true);
@@ -350,35 +354,46 @@ function MusicPlayer() {
       const order    = tracks.map(t => t.id);
       const sorted   = order.map(id => dbTracks.find(t => t.id === id)).filter(Boolean);
 
-      // Sequential to avoid memory spikes on large libraries
-      const exportTracks = [];
-      for (const t of sorted) {
-        exportTracks.push({
-          id:          t.id,
-          name:        t.name,
-          audioBase64: await blobToBase64(t.blob),
-          art:         t.art || null,
-        });
-      }
+      const exportTracks = sorted.map(t => ({
+        id:               t.id,
+        name:             t.name,
+        originalFilename: t.originalFilename || null,
+        art:              t.art || null,   // Cover als base64 eingebettet (klein)
+      }));
 
       const backup = {
-        version:    1,
+        version:    2,
         exportDate: new Date().toISOString(),
         settings:   { eqBass, eqMid, eqTreble, volume, repeat, shuffle },
         tracks:     exportTracks,
       };
 
-      const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `ColdEngine_Backup_${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const jsonStr  = JSON.stringify(backup, null, 2);
+      const filename = `ColdEngine_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+
+      // File System Access API (Chrome/Edge) → nativer Speichern-Dialog
+      if (window.showSaveFilePicker) {
+        const handle   = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'Cold-Engine Backup', accept: { 'application/json': ['.json'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(jsonStr);
+        await writable.close();
+      } else {
+        // Fallback: Download-Link
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+      }
       showToast("Backup gespeichert!");
     } catch (err) {
-      console.error(err);
-      showToast("Backup fehlgeschlagen.");
+      if (err.name !== 'AbortError') {
+        console.error(err);
+        showToast("Backup fehlgeschlagen.");
+      }
     } finally {
       setIsExporting(false);
     }
