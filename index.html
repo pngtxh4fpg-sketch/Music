@@ -9,30 +9,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    
-    /* Dynamische Höhe (100dvh) für Handys und kein Scrollen auf Body-Ebene */
-    html, body { 
-      background: #000; 
-      height: 100dvh; 
-      font-family: 'Inter', -apple-system, sans-serif; 
-      color: #fff; 
-      -webkit-font-smoothing: antialiased; 
-      overflow: hidden; 
-    }
-    
+    html, body { background: #000; height: 100dvh; font-family: 'Inter', -apple-system, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; overflow: hidden; }
     #root { height: 100%; width: 100%; }
-    
     .flat-card { background: #121212; border: 1px solid #222; border-radius: 20px; }
-    
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-    
     .icon-btn { background: none; border: none; cursor: pointer; color: #fff; display: flex; align-items: center; justify-content: center; }
     .icon-btn:active { opacity: 0.6; }
-    
     input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; cursor: pointer; background: #333; }
     input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; cursor: pointer; }
   </style>
@@ -42,20 +27,42 @@
 <script type="text/babel">
 const { useState, useRef, useEffect, useCallback } = React;
 
-// ─── IndexedDB helpers ────────────────────────────────────────────────────────
-const DB_NAME = 'ColdEnginePlayerDB';
-const DB_VERSION = 1;
+// ─── IndexedDB ────────────────────────────────────────────────────────────────
+// v2: Trennung von Blob-Daten (tracks) und Metadaten (tracksMetadata).
+// Beim Start werden nur Metadaten geladen → kein RAM-Problem bei 1000+ Songs.
+// Blobs werden erst geladen, wenn ein Titel wirklich abgespielt wird.
+const DB_NAME    = 'ColdEnginePlayerDB';
+const DB_VERSION = 2;
+const ITEM_H     = 65; // Feste Zeilenhöhe für Virtual Scrolling (px)
 let _db = null;
 
 const getDB = () => new Promise((resolve, reject) => {
   if (_db) return resolve(_db);
   const req = indexedDB.open(DB_NAME, DB_VERSION);
-  req.onupgradeneeded = ({ target: { result: db } }) => {
-    if (!db.objectStoreNames.contains('tracks')) db.createObjectStore('tracks', { keyPath: 'id' });
-    if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+  req.onupgradeneeded = ({ target: { result: db, transaction: upgradeTx }, oldVersion }) => {
+    if (!db.objectStoreNames.contains('tracks'))
+      db.createObjectStore('tracks', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('settings'))
+      db.createObjectStore('settings', { keyPath: 'key' });
+    if (!db.objectStoreNames.contains('tracksMetadata'))
+      db.createObjectStore('tracksMetadata', { keyPath: 'id' });
+    // v1 → v2 Migration: Metadaten aus 'tracks' in 'tracksMetadata' kopieren.
+    // Läuft in der Upgrade-Transaktion; Blobs werden dabei einmalig gelesen.
+    if (oldVersion === 1) {
+      const meta = upgradeTx.objectStore('tracksMetadata');
+      const cur  = upgradeTx.objectStore('tracks').openCursor();
+      cur.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          const { id, name, art, originalFilename } = cursor.value;
+          meta.put({ id, name: name || '', art: art || null, originalFilename: originalFilename || null });
+          cursor.continue();
+        }
+      };
+    }
   };
   req.onsuccess = ({ target: { result: db } }) => { _db = db; resolve(db); };
-  req.onerror = () => reject(req.error);
+  req.onerror   = () => reject(req.error);
 });
 
 const dbPut = async (store, value) => {
@@ -64,38 +71,49 @@ const dbPut = async (store, value) => {
     const tx = db.transaction(store, 'readwrite');
     tx.objectStore(store).put(value);
     tx.oncomplete = res;
-    tx.onerror = () => rej(tx.error);
+    tx.onerror    = () => rej(tx.error);
   });
 };
-
 const dbDelete = async (store, key) => {
   const db = await getDB();
   return new Promise((res, rej) => {
     const tx = db.transaction(store, 'readwrite');
     tx.objectStore(store).delete(key);
     tx.oncomplete = res;
-    tx.onerror = () => rej(tx.error);
+    tx.onerror    = () => rej(tx.error);
   });
 };
-
+const dbGet = async (store, key) => {
+  const db = await getDB();
+  return new Promise((res, rej) => {
+    const tx  = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => res(req.result || null);
+    req.onerror   = () => rej(req.error);
+  });
+};
 const dbGetAll = async (store) => {
   const db = await getDB();
   return new Promise((res, rej) => {
-    const tx = db.transaction(store, 'readonly');
+    const tx  = db.transaction(store, 'readonly');
     const req = tx.objectStore(store).getAll();
     req.onsuccess = () => res(req.result);
-    req.onerror = () => rej(req.error);
+    req.onerror   = () => rej(req.error);
   });
 };
-
 const dbClear = async (store) => {
   const db = await getDB();
   return new Promise((res, rej) => {
     const tx = db.transaction(store, 'readwrite');
     tx.objectStore(store).clear();
     tx.oncomplete = res;
-    tx.onerror = () => rej(tx.error);
+    tx.onerror    = () => rej(tx.error);
   });
+};
+// Blob nur laden wenn der Track wirklich abgespielt wird
+const loadBlob = async (trackId) => {
+  const rec = await dbGet('tracks', trackId);
+  return rec?.blob || null;
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -104,21 +122,18 @@ const blobToBase64 = (blob) => new Promise(res => {
   r.onload = () => res(r.result);
   r.readAsDataURL(blob);
 });
-
 const base64ToBlob = (dataURL) => {
   const [header, data] = dataURL.split(',');
-  const mime = header.match(/:(.*?);/)[1];
+  const mime   = header.match(/:(.*?);/)[1];
   const binary = atob(data);
-  const arr = new Uint8Array(binary.length);
+  const arr    = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
   return new Blob([arr], { type: mime });
 };
-
 const formatTime = (s) => {
   if (!s || isNaN(s)) return "0:00";
   return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 };
-
 const MusicNote = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round">
     <path d="M9 18V5l12-2v13"/>
@@ -148,30 +163,27 @@ function MusicPlayer() {
   const [eqMid, setEqMid]             = useState(0);
   const [eqTreble, setEqTreble]       = useState(0);
   const [isRendering, setIsRendering] = useState(false);
-  
-  // Live-Preview states
   const [previewPlaying, setPreviewPlaying]     = useState(false);
   const [previewTime, setPreviewTime]           = useState(0);
   const [previewDuration, setPreviewDuration]   = useState(0);
   const [previewScrubbing, setPreviewScrubbing] = useState(false);
-
-  // Einstellungen
   const [headphoneOnly, setHeadphoneOnly]           = useState(false);
-  const [headphonesDetected, setHeadphonesDetected] = useState(null); 
+  const [headphonesDetected, setHeadphonesDetected] = useState(null);
+  // Virtual Scroll
+  const [listScrollTop, setListScrollTop] = useState(0);
+  const [listHeight, setListHeight]       = useState(500);
 
-  const audioRef       = useRef(null);
-  const fileInputRef   = useRef(null);
-  const artInputRef    = useRef(null);
-  const importRef      = useRef(null);
-  
-  const previewAudioRef = useRef(null);
-  const audioCtxRef     = useRef(null);
-  const bassNodeRef     = useRef(null);
-  const midNodeRef      = useRef(null);
-  const trebleNodeRef   = useRef(null);
-
-  // Speicher für bereits gespielte Titel (Smart Shuffle)
+  const audioRef         = useRef(null);
+  const fileInputRef     = useRef(null);
+  const artInputRef      = useRef(null);
+  const importRef        = useRef(null);
+  const previewAudioRef  = useRef(null);
+  const audioCtxRef      = useRef(null);
+  const bassNodeRef      = useRef(null);
+  const midNodeRef       = useRef(null);
+  const trebleNodeRef    = useRef(null);
   const playedHistoryRef = useRef([]);
+  const listContainerRef = useRef(null);
 
   const currentTrack    = currentIdx !== null ? tracks[currentIdx] : null;
   const previewProgress = previewDuration ? (previewTime / previewDuration) * 100 : 0;
@@ -182,30 +194,32 @@ function MusicPlayer() {
   };
 
   // ─── Load from IndexedDB on mount ─────────────────────────────────────────
+  // Liest nur tracksMetadata (keine Blobs) → schneller Start bei 1000+ Songs
   useEffect(() => {
     const load = async () => {
       try {
-        const [dbTracks, dbSettings] = await Promise.all([dbGetAll('tracks'), dbGetAll('settings')]);
+        const [dbMeta, dbSettings] = await Promise.all([dbGetAll('tracksMetadata'), dbGetAll('settings')]);
         const s = {};
         dbSettings.forEach(({ key, value }) => { s[key] = value; });
 
-        if (s.eqBass   !== undefined) setEqBass(s.eqBass);
-        if (s.eqMid    !== undefined) setEqMid(s.eqMid);
-        if (s.eqTreble !== undefined) setEqTreble(s.eqTreble);
-        if (s.volume   !== undefined) { setVolume(s.volume); if (audioRef.current) audioRef.current.volume = s.volume; }
-        if (s.repeat   !== undefined) setRepeat(s.repeat);
-        if (s.shuffle  !== undefined) setShuffle(s.shuffle);
+        if (s.eqBass        !== undefined) setEqBass(s.eqBass);
+        if (s.eqMid         !== undefined) setEqMid(s.eqMid);
+        if (s.eqTreble      !== undefined) setEqTreble(s.eqTreble);
+        if (s.volume        !== undefined) { setVolume(s.volume); if (audioRef.current) audioRef.current.volume = s.volume; }
+        if (s.repeat        !== undefined) setRepeat(s.repeat);
+        if (s.shuffle       !== undefined) setShuffle(s.shuffle);
         if (s.headphoneOnly !== undefined) setHeadphoneOnly(s.headphoneOnly);
 
-        if (dbTracks.length > 0) {
-          const order = s.trackOrder || [];
+        if (dbMeta.length > 0) {
+          const order  = s.trackOrder || [];
           const sorted = [
-            ...order.map(id => dbTracks.find(t => t.id === id)).filter(Boolean),
-            ...dbTracks.filter(t => !order.includes(t.id)),
+            ...order.map(id => dbMeta.find(t => t.id === id)).filter(Boolean),
+            ...dbMeta.filter(t => !order.includes(t.id)),
           ];
+          // url: null → Blob wird erst beim ersten Abspielen aus DB geholt
           const loaded = sorted.map(t => ({
             id: t.id, name: t.name,
-            url: URL.createObjectURL(t.blob),
+            url: null,
             art: t.art || null,
             originalFilename: t.originalFilename || null,
           }));
@@ -224,13 +238,13 @@ function MusicPlayer() {
     load();
   }, []);
 
-  // ─── Auto-save settings (debounced) ───────────────────────────────────────
+  // ─── Auto-save settings ────────────────────────────────────────────────────
   useEffect(() => {
     if (!dbLoaded) return;
     const t = setTimeout(() => {
       const toSave = {
         eqBass, eqMid, eqTreble, volume, repeat, shuffle, headphoneOnly,
-        trackOrder: tracks.map(t => t.id),
+        trackOrder:     tracks.map(t => t.id),
         currentTrackId: currentIdx !== null ? (tracks[currentIdx]?.id ?? null) : null,
       };
       Promise.all(Object.entries(toSave).map(([key, value]) => dbPut('settings', { key, value })))
@@ -238,6 +252,13 @@ function MusicPlayer() {
     }, 600);
     return () => clearTimeout(t);
   }, [eqBass, eqMid, eqTreble, volume, repeat, shuffle, tracks, currentIdx, dbLoaded, headphoneOnly]);
+
+  // ─── Virtual Scroll: Containerhöhe messen ─────────────────────────────────
+  useEffect(() => {
+    if (view !== "playlist" || !listContainerRef.current) return;
+    setListHeight(listContainerRef.current.clientHeight || 500);
+    setListScrollTop(0);
+  }, [view]);
 
   const handleVolumeChange = (v) => {
     setVolume(v);
@@ -251,7 +272,7 @@ function MusicPlayer() {
       const devices   = await navigator.mediaDevices.enumerateDevices();
       const outputs   = devices.filter(d => d.kind === 'audiooutput');
       const hasLabels = outputs.some(d => d.label);
-      if (!hasLabels) { setHeadphonesDetected(null); return null; } 
+      if (!hasLabels) { setHeadphonesDetected(null); return null; }
       const found = outputs.some(d => /headphone|headset|airpod|earphone|earbuds|bluetooth|wireless/i.test(d.label));
       setHeadphonesDetected(found);
       return found;
@@ -274,24 +295,28 @@ function MusicPlayer() {
     }
   }, [headphonesDetected, headphoneOnly, playing]);
 
-  // ─── Playback & Smart Shuffle ─────────────────────────────────────────────
+  // ─── Playback ─────────────────────────────────────────────────────────────
   const isAudioFile = (file) =>
     file.type.includes("audio") ||
     ["video/mp4", "audio/mp4", "audio/x-m4a"].includes(file.type) ||
     /\.(mp3|wav|ogg|m4a|mp4|flac|aac|opus)$/i.test(file.name);
 
   const playTrack = useCallback(async (idx, list) => {
-    const tl = list || tracks;
-    const track = tl[idx];
+    const tl  = list || tracks;
+    let track = tl[idx];
     if (!track || !audioRef.current) return;
-    
-    // Smart Shuffle: Track im Gedächtnis eintragen
-    if (!playedHistoryRef.current.includes(track.id)) {
-      playedHistoryRef.current.push(track.id);
-    }
-    // Wenn alle Tracks durchgespielt wurden -> Gedächtnis resetten
-    if (playedHistoryRef.current.length >= tl.length) {
-      playedHistoryRef.current = [track.id];
+
+    // Smart Shuffle History
+    if (!playedHistoryRef.current.includes(track.id)) playedHistoryRef.current.push(track.id);
+    if (playedHistoryRef.current.length >= tl.length)  playedHistoryRef.current = [track.id];
+
+    // Lazy Load: Blob erst jetzt aus IndexedDB holen
+    if (!track.url) {
+      const blob = await loadBlob(track.id);
+      if (!blob) { showToast("Audio nicht gefunden."); return; }
+      const url = URL.createObjectURL(blob);
+      setTracks(prev => prev.map(t => t.id === track.id ? { ...t, url } : t));
+      track = { ...track, url };
     }
 
     audioRef.current.src = track.url;
@@ -304,25 +329,15 @@ function MusicPlayer() {
   const goNext = useCallback(() => {
     if (!tracks.length) return;
     if (shuffle) {
-      // Filtere alle Songs, die noch NICHT in der History sind
       const currId = currentIdx !== null ? tracks[currentIdx]?.id : null;
       let unplayed = tracks.filter(t => !playedHistoryRef.current.includes(t.id) && t.id !== currId);
-      
-      // Fallback: Falls die Liste leer ist (z.B. nach Löschen), komplett zurücksetzen
       if (unplayed.length === 0) {
         playedHistoryRef.current = [];
         unplayed = tracks.filter(t => t.id !== currId);
       }
-      
-      if (unplayed.length === 0) {
-        playTrack(0); // Wenn nur 1 Song in Playlist
-        return;
-      }
-      
-      // Zufälligen, ungespielten Track picken
-      const nextTrack = unplayed[Math.floor(Math.random() * unplayed.length)];
-      const nextIdx = tracks.findIndex(t => t.id === nextTrack.id);
-      playTrack(nextIdx !== -1 ? nextIdx : 0);
+      if (unplayed.length === 0) { playTrack(0); return; }
+      const next = unplayed[Math.floor(Math.random() * unplayed.length)];
+      playTrack(tracks.findIndex(t => t.id === next.id) ?? 0);
     } else {
       playTrack(((currentIdx ?? -1) + 1) % tracks.length);
     }
@@ -344,6 +359,15 @@ function MusicPlayer() {
         showToast("Kopfhörer erforderlich.");
         return;
       }
+      // Lazy Load beim Resume nach Neustart
+      if (!currentTrack.url) {
+        const blob = await loadBlob(currentTrack.id);
+        if (!blob) { showToast("Audio nicht gefunden."); return; }
+        const url = URL.createObjectURL(blob);
+        setTracks(prev => prev.map(t => t.id === currentTrack.id ? { ...t, url } : t));
+        audioRef.current.src = url;
+        audioRef.current.load();
+      }
       audioRef.current.play().catch(() => {});
       setPlaying(true);
     }
@@ -352,24 +376,23 @@ function MusicPlayer() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const onTime   = () => { if (!isScrubbing) setCurrentTime(audio.currentTime); };
-    const onDur    = () => setDuration(audio.duration);
-    const onEnded  = () => { if (repeat) { audio.currentTime = 0; audio.play(); } else goNext(); };
-    audio.addEventListener("timeupdate", onTime);
+    const onTime  = () => { if (!isScrubbing) setCurrentTime(audio.currentTime); };
+    const onDur   = () => setDuration(audio.duration);
+    const onEnded = () => { if (repeat) { audio.currentTime = 0; audio.play(); } else goNext(); };
+    audio.addEventListener("timeupdate",     onTime);
     audio.addEventListener("loadedmetadata", onDur);
-    audio.addEventListener("ended", onEnded);
+    audio.addEventListener("ended",          onEnded);
     return () => {
-      audio.removeEventListener("timeupdate", onTime);
+      audio.removeEventListener("timeupdate",     onTime);
       audio.removeEventListener("loadedmetadata", onDur);
-      audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("ended",          onEnded);
     };
   }, [goNext, repeat, isScrubbing]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator) || !currentTrack) return;
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.name, 
-      artist: "Music", 
+      title: currentTrack.name, artist: "Music",
       artwork: currentTrack.art ? [{ src: currentTrack.art, sizes: "300x300", type: "image/jpeg" }] : [],
     });
     navigator.mediaSession.setActionHandler("play",          () => { audioRef.current?.play(); setPlaying(true); });
@@ -382,7 +405,6 @@ function MusicPlayer() {
   const handleFiles = async (files) => {
     const audio = Array.from(files).filter(isAudioFile);
     if (!audio.length) { showToast("Keine Audio-Dateien erkannt!"); return; }
-
     const newTracks = audio.map((f, i) => ({
       id:               `t-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
       name:             f.name.replace(/\.[^/.]+$/, "").replace("_tuned", " 🔊"),
@@ -390,8 +412,12 @@ function MusicPlayer() {
       art:              null,
       originalFilename: f.name,
     }));
-
-    await Promise.all(newTracks.map(t => dbPut('tracks', t))).catch(console.error);
+    // Blob → tracks | Metadaten → tracksMetadata (getrennte Stores)
+    await Promise.all([
+      ...newTracks.map(t => dbPut('tracks',         { id: t.id, blob: t.blob })),
+      ...newTracks.map(t => dbPut('tracksMetadata', { id: t.id, name: t.name, art: null, originalFilename: t.originalFilename })),
+    ]).catch(console.error);
+    // URL sofort erstellen (Blob ist schon im RAM, kein DB-Fetch nötig)
     setTracks(prev => [
       ...prev,
       ...newTracks.map(t => ({ id: t.id, name: t.name, url: URL.createObjectURL(t.blob), art: null, originalFilename: t.originalFilename })),
@@ -408,10 +434,10 @@ function MusicPlayer() {
       const trackId = tracks[currentIdx].id;
       setTracks(prev => prev.map((t, i) => i === currentIdx ? { ...t, art } : t));
       try {
-        const db = await getDB();
-        const tx = db.transaction('tracks', 'readwrite');
-        const store = tx.objectStore('tracks');
-        const req = store.get(trackId);
+        const db    = await getDB();
+        const tx    = db.transaction('tracksMetadata', 'readwrite');
+        const store = tx.objectStore('tracksMetadata');
+        const req   = store.get(trackId);
         req.onsuccess = () => { if (req.result) store.put({ ...req.result, art }); };
       } catch (err) { console.error('Art save error:', err); }
     };
@@ -422,8 +448,9 @@ function MusicPlayer() {
   const removeTrack = (idx, e) => {
     e.stopPropagation();
     const track = tracks[idx];
-    URL.revokeObjectURL(track.url);
-    dbDelete('tracks', track.id).catch(console.error);
+    if (track.url) URL.revokeObjectURL(track.url);
+    dbDelete('tracks',         track.id).catch(console.error);
+    dbDelete('tracksMetadata', track.id).catch(console.error);
     setTracks(prev => prev.filter((_, i) => i !== idx));
     if (idx === currentIdx) {
       if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; }
@@ -448,32 +475,25 @@ function MusicPlayer() {
     setIsExporting(true);
     showToast("Erstelle Backup...");
     try {
-      const dbTracks = await dbGetAll('tracks');
-      const order    = tracks.map(t => t.id);
-      const sorted   = order.map(id => dbTracks.find(t => t.id === id)).filter(Boolean);
-      const exportTracks = sorted.map(t => ({
-        id:               t.id,
-        name:             t.name,
-        originalFilename: t.originalFilename || null,
-        art:              t.art || null,  
-      }));
+      const dbMeta = await dbGetAll('tracksMetadata'); // kein Blob nötig
+      const order  = tracks.map(t => t.id);
+      const sorted = order.map(id => dbMeta.find(t => t.id === id)).filter(Boolean);
       const backup = {
         version:    2,
         exportDate: new Date().toISOString(),
         settings:   { eqBass, eqMid, eqTreble, repeat, shuffle },
-        tracks:     exportTracks,
+        tracks:     sorted.map(t => ({ id: t.id, name: t.name, originalFilename: t.originalFilename || null, art: t.art || null })),
       };
       const jsonStr  = JSON.stringify(backup, null, 2);
       const filename = `Music_Backup_${new Date().toISOString().slice(0, 10)}.json`;
-      
       if (window.showSaveFilePicker) {
-        const handle   = await window.showSaveFilePicker({
+        const handle = await window.showSaveFilePicker({
           suggestedName: filename,
           types: [{ description: 'Music Backup', accept: { 'application/json': ['.json'] } }],
         });
-        const writable = await handle.createWritable();
-        await writable.write(jsonStr);
-        await writable.close();
+        const w = await handle.createWritable();
+        await w.write(jsonStr);
+        await w.close();
       } else {
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
@@ -483,10 +503,7 @@ function MusicPlayer() {
       }
       showToast("Backup gespeichert!");
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error(err);
-        showToast("Backup fehlgeschlagen.");
-      }
+      if (err.name !== 'AbortError') { console.error(err); showToast("Backup fehlgeschlagen."); }
     } finally {
       setIsExporting(false);
     }
@@ -497,72 +514,44 @@ function MusicPlayer() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     e.target.value = "";
-
     const jsonFile   = files.find(f => f.name.endsWith('.json') || f.type === 'application/json');
     const audioFiles = files.filter(f => isAudioFile(f));
-
     if (!jsonFile) { showToast("Keine Backup-Datei (.json) gefunden."); return; }
-
     setIsImporting(true);
     showToast("Importiere Backup...");
     try {
       const backup = JSON.parse(await jsonFile.text());
-      if (!Array.isArray(backup.tracks)) {
-        showToast("Ungültiges Backup-Format."); setIsImporting(false); return;
-      }
-
+      if (!Array.isArray(backup.tracks)) { showToast("Ungültiges Backup-Format."); setIsImporting(false); return; }
       if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; }
-      tracks.forEach(t => URL.revokeObjectURL(t.url));
-      await dbClear('tracks');
-      await dbClear('settings');
-      setPlaying(false); setCurrentIdx(null); setCurrentTime(0); setDuration(0);
-      setRenderTrackIdx("");
-
+      tracks.forEach(t => { if (t.url) URL.revokeObjectURL(t.url); });
+      await dbClear('tracks'); await dbClear('tracksMetadata'); await dbClear('settings');
+      setPlaying(false); setCurrentIdx(null); setCurrentTime(0); setDuration(0); setRenderTrackIdx("");
       const s = backup.settings || {};
-      setEqBass(s.eqBass ?? 0);
-      setEqMid(s.eqMid ?? 0); setEqTreble(s.eqTreble ?? 0);
+      setEqBass(s.eqBass ?? 0); setEqMid(s.eqMid ?? 0); setEqTreble(s.eqTreble ?? 0);
       setRepeat(s.repeat ?? false); setShuffle(s.shuffle ?? false);
-
-      const audioMap = new Map(audioFiles.map(f => [f.name, f]));
+      const audioMap  = new Map(audioFiles.map(f => [f.name, f]));
       const matched   = [];
       const unmatched = [];
-      
       for (const tm of backup.tracks) {
         let blob = null;
         if (backup.version === 1 && tm.audioBase64) {
           blob = base64ToBlob(tm.audioBase64);
         } else {
-          const filename  = tm.originalFilename || null;
-          const audioFile = filename ? audioMap.get(filename) : null;
-          if (!audioFile) { unmatched.push(filename || tm.name); continue; }
-          blob = audioFile;
+          const af = tm.originalFilename ? audioMap.get(tm.originalFilename) : null;
+          if (!af) { unmatched.push(tm.originalFilename || tm.name); continue; }
+          blob = af;
         }
-
-        matched.push({
-          id:               tm.id,
-          name:             tm.name,
-          blob,
-          art:              tm.art || null,
-          originalFilename: tm.originalFilename || null,
-        });
+        matched.push({ id: tm.id, name: tm.name, blob, art: tm.art || null, originalFilename: tm.originalFilename || null });
       }
-
-      await Promise.all(matched.map(t => dbPut('tracks', t)));
-      const stateTracks = matched.map(t => ({
-        id: t.id, name: t.name,
-        url: URL.createObjectURL(t.blob),
-        art: t.art,
-        originalFilename: t.originalFilename,
-      }));
-      setTracks(stateTracks);
-
-      const msg = unmatched.length > 0
-        ? `${matched.length} Titel geladen. Nicht gefunden: ${unmatched.join(', ')}`
-        : `${matched.length} Titel wiederhergestellt!`;
-      showToast(msg);
+      await Promise.all([
+        ...matched.map(t => dbPut('tracks',         { id: t.id, blob: t.blob })),
+        ...matched.map(t => dbPut('tracksMetadata', { id: t.id, name: t.name, art: t.art, originalFilename: t.originalFilename })),
+      ]);
+      setTracks(matched.map(t => ({ id: t.id, name: t.name, url: URL.createObjectURL(t.blob), art: t.art, originalFilename: t.originalFilename })));
+      showToast(unmatched.length > 0 ? `${matched.length} geladen. Nicht gefunden: ${unmatched.join(', ')}` : `${matched.length} Titel wiederhergestellt!`);
     } catch (err) {
       console.error(err);
-      showToast("Import fehlgeschlagen. Datei beschädigt?");
+      showToast("Import fehlgeschlagen.");
     } finally {
       setIsImporting(false);
     }
@@ -571,14 +560,13 @@ function MusicPlayer() {
   // ─── Clear library ────────────────────────────────────────────────────────
   const clearLibrary = async () => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; }
-    tracks.forEach(t => URL.revokeObjectURL(t.url));
-    await Promise.all([dbClear('tracks'), dbClear('settings')]).catch(console.error);
+    tracks.forEach(t => { if (t.url) URL.revokeObjectURL(t.url); });
+    await Promise.all([dbClear('tracks'), dbClear('tracksMetadata'), dbClear('settings')]).catch(console.error);
     setTracks([]); setCurrentIdx(null); setPlaying(false);
     setCurrentTime(0); setDuration(0);
     setEqBass(0); setEqMid(0); setEqTreble(0);
     setRepeat(false); setShuffle(false);
-    setConfirmClear(false);
-    setRenderTrackIdx("");
+    setConfirmClear(false); setRenderTrackIdx("");
     playedHistoryRef.current = [];
     showToast("Bibliothek gelöscht.");
   };
@@ -587,22 +575,27 @@ function MusicPlayer() {
   const renderAndDownloadTrack = async () => {
     const idx = parseInt(renderTrackIdx);
     if (isNaN(idx) || !tracks[idx]) { showToast("Bitte wähle zuerst einen Song aus."); return; }
-    const target = tracks[idx];
+    let target = tracks[idx];
     setIsRendering(true);
     showToast("Berechne EQ-Tuning...");
     try {
-      const response    = await fetch(target.url);
+      let url = target.url;
+      if (!url) {
+        const blob = await loadBlob(target.id);
+        if (!blob) { showToast("Audio nicht gefunden."); setIsRendering(false); return; }
+        url = URL.createObjectURL(blob);
+        setTracks(prev => prev.map(t => t.id === target.id ? { ...t, url } : t));
+      }
+      const response    = await fetch(url);
       const arrayBuffer = await response.arrayBuffer();
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const decodeCtx   = new AudioContext();
       const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
       decodeCtx.close();
-
       const OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
       const offlineCtx = new OfflineContext(audioBuffer.numberOfChannels, audioBuffer.length, audioBuffer.sampleRate);
       const src = offlineCtx.createBufferSource();
       src.buffer = audioBuffer;
-
       const mkFilter = (type, freq, gain, Q) => {
         const f = offlineCtx.createBiquadFilter();
         f.type = type; f.frequency.setValueAtTime(freq, 0); f.gain.setValueAtTime(gain, 0);
@@ -612,16 +605,14 @@ function MusicPlayer() {
       const bass   = mkFilter("lowshelf",  150,  eqBass);
       const mid    = mkFilter("peaking",   1000, eqMid, 1);
       const treble = mkFilter("highshelf", 4000, eqTreble);
-
-      src.connect(bass); bass.connect(mid);
-      mid.connect(treble); treble.connect(offlineCtx.destination);
+      src.connect(bass); bass.connect(mid); mid.connect(treble); treble.connect(offlineCtx.destination);
       src.start(0);
       const rendered = await offlineCtx.startRendering();
       const wavBlob  = bufferToWav(rendered);
-      const url      = URL.createObjectURL(wavBlob);
+      const dlUrl    = URL.createObjectURL(wavBlob);
       const a        = document.createElement("a");
-      a.href = url; a.download = `${target.name}_tuned.m4a`; a.click();
-      URL.revokeObjectURL(url);
+      a.href = dlUrl; a.download = `${target.name}_tuned.m4a`; a.click();
+      URL.revokeObjectURL(dlUrl);
       showToast("Tuning erfolgreich!");
     } catch (err) {
       console.error(err);
@@ -637,7 +628,7 @@ function MusicPlayer() {
     const ab  = new ArrayBuffer(len);
     const dv  = new DataView(ab);
     let pos = 0;
-    const ws  = (s) => { for (let i = 0; i < s.length; i++) dv.setUint8(pos++, s.charCodeAt(i)); };
+    const ws   = (s) => { for (let i = 0; i < s.length; i++) dv.setUint8(pos++, s.charCodeAt(i)); };
     const wu16 = (v) => { dv.setUint16(pos, v, true); pos += 2; };
     const wu32 = (v) => { dv.setUint32(pos, v, true); pos += 4; };
     ws("RIFF"); wu32(len - 8); ws("WAVE"); ws("fmt ");
@@ -648,7 +639,7 @@ function MusicPlayer() {
     let offset = 0;
     while (pos < len) {
       for (let i = 0; i < ch; i++) {
-        let s = Math.max(-1, Math.min(1, chData[i][offset]));
+        const s = Math.max(-1, Math.min(1, chData[i][offset]));
         dv.setInt16(pos, s < 0 ? s * 0x8000 : s * 0x7FFF, true); pos += 2;
       }
       offset++;
@@ -656,7 +647,7 @@ function MusicPlayer() {
     return new Blob([ab], { type: "audio/x-m4a" });
   };
 
-  // ─── Live-Preview: EQ ─────────────────────────────────────────────────────
+  // ─── Live-Preview EQ ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!bassNodeRef.current || !audioCtxRef.current) return;
     const now = audioCtxRef.current.currentTime;
@@ -665,16 +656,26 @@ function MusicPlayer() {
     trebleNodeRef.current.gain.setValueAtTime(eqTreble, now);
   }, [eqBass, eqMid, eqTreble]);
 
+  // Preview Track laden (lazy)
+  // 'tracks' bewusst nicht in deps → würde Loop erzeugen wenn url gesetzt wird
   useEffect(() => {
     if (renderTrackIdx === "" || !previewAudioRef.current) return;
-    const track = tracks[parseInt(renderTrackIdx)];
+    const idx   = parseInt(renderTrackIdx);
+    const track = tracks[idx];
     if (!track) return;
-    previewAudioRef.current.src = track.url;
-    previewAudioRef.current.load();
-    setPreviewPlaying(false);
-    setPreviewTime(0);
-    setPreviewDuration(0);
-  }, [renderTrackIdx, tracks]);
+    setPreviewPlaying(false); setPreviewTime(0); setPreviewDuration(0);
+    const load = async () => {
+      let url = track.url;
+      if (!url) {
+        const blob = await loadBlob(track.id);
+        if (!blob || !previewAudioRef.current) return;
+        url = URL.createObjectURL(blob);
+        setTracks(prev => prev.map(t => t.id === track.id ? { ...t, url } : t));
+      }
+      if (previewAudioRef.current) { previewAudioRef.current.src = url; previewAudioRef.current.load(); }
+    };
+    load();
+  }, [renderTrackIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (view !== "tuning" && previewAudioRef.current && previewPlaying) {
@@ -686,9 +687,9 @@ function MusicPlayer() {
   useEffect(() => {
     const audio = previewAudioRef.current;
     if (!audio) return;
-    const onTime   = () => { if (!previewScrubbing) setPreviewTime(audio.currentTime); };
-    const onDur    = () => setPreviewDuration(audio.duration || 0);
-    const onEnded  = () => setPreviewPlaying(false);
+    const onTime  = () => { if (!previewScrubbing) setPreviewTime(audio.currentTime); };
+    const onDur   = () => setPreviewDuration(audio.duration || 0);
+    const onEnded = () => setPreviewPlaying(false);
     audio.addEventListener('timeupdate',     onTime);
     audio.addEventListener('loadedmetadata', onDur);
     audio.addEventListener('ended',          onEnded);
@@ -699,11 +700,7 @@ function MusicPlayer() {
     };
   }, [previewScrubbing]);
 
-  useEffect(() => {
-    return () => {
-      audioCtxRef.current?.close().catch(() => {});
-    };
-  }, []);
+  useEffect(() => { return () => { audioCtxRef.current?.close().catch(() => {}); }; }, []);
 
   const ensureAudioCtx = async () => {
     if (audioCtxRef.current) {
@@ -711,32 +708,24 @@ function MusicPlayer() {
       return;
     }
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const ctx  = new AudioContext();
-    const bass = ctx.createBiquadFilter();
-    bass.type  = 'lowshelf'; bass.frequency.value = 150; bass.gain.value = eqBass;
-    const mid  = ctx.createBiquadFilter();
-    mid.type   = 'peaking';  mid.frequency.value  = 1000; mid.Q.value = 1; mid.gain.value = eqMid;
+    const ctx    = new AudioContext();
+    const bass   = ctx.createBiquadFilter();
+    bass.type    = 'lowshelf';  bass.frequency.value = 150;  bass.gain.value = eqBass;
+    const mid    = ctx.createBiquadFilter();
+    mid.type     = 'peaking';   mid.frequency.value  = 1000; mid.Q.value = 1; mid.gain.value = eqMid;
     const treble = ctx.createBiquadFilter();
     treble.type  = 'highshelf'; treble.frequency.value = 4000; treble.gain.value = eqTreble;
     const src = ctx.createMediaElementSource(previewAudioRef.current);
     src.connect(bass); bass.connect(mid); mid.connect(treble); treble.connect(ctx.destination);
-    audioCtxRef.current  = ctx;
-    bassNodeRef.current  = bass;
-    midNodeRef.current   = mid;
-    trebleNodeRef.current = treble;
+    audioCtxRef.current = ctx; bassNodeRef.current = bass; midNodeRef.current = mid; trebleNodeRef.current = treble;
   };
 
   const togglePreviewPlay = async () => {
     if (!previewAudioRef.current || renderTrackIdx === "") return;
     if (playing && audioRef.current) { audioRef.current.pause(); setPlaying(false); }
     await ensureAudioCtx();
-    if (previewPlaying) {
-      previewAudioRef.current.pause();
-      setPreviewPlaying(false);
-    } else {
-      await previewAudioRef.current.play().catch(() => {});
-      setPreviewPlaying(true);
-    }
+    if (previewPlaying) { previewAudioRef.current.pause(); setPreviewPlaying(false); }
+    else { await previewAudioRef.current.play().catch(() => {}); setPreviewPlaying(true); }
   };
 
   const seekPreview = (delta) => {
@@ -746,7 +735,11 @@ function MusicPlayer() {
     setPreviewTime(t);
   };
 
-  const progress = duration ? (currentTime / duration) * 100 : 0;
+  // ─── Virtual Scroll Berechnung ────────────────────────────────────────────
+  const vsStart    = Math.max(0, Math.floor(listScrollTop / ITEM_H) - 3);
+  const vsEnd      = Math.min(tracks.length - 1, Math.ceil((listScrollTop + listHeight) / ITEM_H) + 3);
+  const totalListH = tracks.length * ITEM_H;
+  const progress   = duration ? (currentTime / duration) * 100 : 0;
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -756,9 +749,8 @@ function MusicPlayer() {
         <audio ref={audioRef} preload="auto" playsInline />
         <audio ref={previewAudioRef} preload="auto" playsInline />
         <input ref={fileInputRef} type="file" accept="audio/*, .m4a, .mp4, audio/mp4, audio/x-m4a" multiple style={{ display: "none" }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
-    
-        <input ref={artInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleArtFile} />
-        <input ref={importRef} type="file" accept=".json,application/json,audio/*,.m4a,.mp3,.wav,.ogg,.flac,.aac,.opus,.mp4" multiple style={{ display: "none" }} onChange={importBackup} />
+        <input ref={artInputRef}  type="file" accept="image/*" style={{ display: "none" }} onChange={handleArtFile} />
+        <input ref={importRef}    type="file" accept=".json,application/json,audio/*,.m4a,.mp3,.wav,.ogg,.flac,.aac,.opus,.mp4" multiple style={{ display: "none" }} onChange={importBackup} />
 
         {toast && (
           <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", background: "#1a1a1a", border: "1px solid #333", color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 13, zIndex: 100, textAlign: "center", width: "90%", maxWidth: 320 }}>
@@ -772,7 +764,7 @@ function MusicPlayer() {
             <h1 style={{ fontSize: 24, fontWeight: 800 }}>Music</h1>
             {dbLoaded && tracks.length > 0 && (
               <div style={{ fontSize: 10, color: "#3a3a3a", marginTop: 3, fontWeight: 600, letterSpacing: "0.04em" }}>
-                ⚡ {tracks.length} {tracks.length === 1 ? "Titel" : "Titel"} lokal gespeichert
+                ⚡ {tracks.length} Titel lokal gespeichert
               </div>
             )}
           </div>
@@ -794,16 +786,13 @@ function MusicPlayer() {
         {view === "player" && (
           <div className="flat-card" style={{ padding: "24px", flex: 1, overflowY: "auto" }}>
             <div style={{ width: "100%", aspectRatio: "1", borderRadius: 12, marginBottom: 24, overflow: "hidden", background: "#181818", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #222", position: "relative" }}>
-              {currentTrack?.art
-                ? <img src={currentTrack.art} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <MusicNote />}
+              {currentTrack?.art ? <img src={currentTrack.art} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <MusicNote />}
               {currentTrack && (
                 <button onClick={() => artInputRef.current?.click()} style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.7)", border: "1px solid #333", borderRadius: 8, color: "#fff", padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>
                   Cover ändern
                 </button>
               )}
             </div>
-
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 18, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {currentTrack ? currentTrack.name : "Kein Titel geladen"}
@@ -812,7 +801,6 @@ function MusicPlayer() {
                 {currentTrack ? `Titel ${(currentIdx ?? 0) + 1} von ${tracks.length}` : "Füge Musik im Tab 'Titelliste' hinzu"}
               </div>
             </div>
-
             <div style={{ marginBottom: 24 }}>
               <input type="range" min="0" max={duration || 100} value={currentTime}
                 onMouseDown={() => setIsScrubbing(true)} onMouseUp={() => setIsScrubbing(false)}
@@ -824,7 +812,6 @@ function MusicPlayer() {
                 <span>-{formatTime(duration - currentTime)}</span>
               </div>
             </div>
-
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
               <button onClick={() => setShuffle(s => !s)} className="icon-btn" style={{ color: shuffle ? "#fc3c44" : "#444" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
@@ -833,56 +820,77 @@ function MusicPlayer() {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" strokeWidth="2.5"/></svg>
               </button>
               <button onClick={togglePlay} className="icon-btn" style={{ width: 56, height: 56, borderRadius: "50%", background: "#fff", color: "#000" }}>
-                {playing
-                  ? <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
-                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><polygon points="6 3 20 12 6 21 6 3"/></svg>}
+                {playing ? <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+                         : <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><polygon points="6 3 20 12 6 21 6 3"/></svg>}
               </button>
               <button onClick={goNext} className="icon-btn">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2.5"/></svg>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2.5"/></svg>
               </button>
               <button onClick={() => setRepeat(r => !r)} className="icon-btn" style={{ color: repeat ? "#fc3c44" : "#444" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
               </button>
             </div>
-
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
               <input type="range" min="0" max="1" step="0.05" value={volume}
                 onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                onInput={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                onInput={(e)  => handleVolumeChange(parseFloat(e.target.value))}
                 style={{ flex: 1, background: `linear-gradient(to right, #fc3c44 ${volume * 100}%, #222 ${volume * 100}%)` }} />
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2.5"><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
             </div>
           </div>
         )}
 
-        {/* ── PLAYLIST ── */}
+        {/* ── PLAYLIST (Virtual Scroll) ── */}
         {view === "playlist" && (
           tracks.length > 0 ? (
             <div className="flat-card" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-              <div style={{ flex: 1, overflowY: "auto" }}>
-                {tracks.map((t, i) => (
-                  <div key={t.id} onClick={() => { playTrack(i); setView("player"); }}
-                    style={{ display: "flex", alignItems: "center", padding: "12px 14px", gap: 12, background: i === currentIdx ? "#1a1a1a" : "transparent", borderBottom: "1px solid #1a1a1a", cursor: "pointer" }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 8, background: "#181818", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #222" }}>
-                      {t.art ? <img src={t.art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ transform: "scale(0.8)" }}><MusicNote /></div>}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: i === currentIdx ? 800 : 500, color: i === currentIdx ? "#fc3c44" : "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {t.name}
+              <div
+                ref={listContainerRef}
+                onScroll={(e) => setListScrollTop(e.currentTarget.scrollTop)}
+                style={{ flex: 1, overflowY: "auto", position: "relative" }}
+              >
+                {/* Tall spacer: gibt der Scrollbar die korrekte Gesamthöhe */}
+                <div style={{ height: totalListH, position: "relative" }}>
+                  {Array.from({ length: Math.max(0, vsEnd - vsStart + 1) }, (_, vi) => {
+                    const i = vsStart + vi;
+                    if (i >= tracks.length) return null;
+                    const t = tracks[i];
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => { playTrack(i); setView("player"); }}
+                        style={{
+                          position: "absolute",
+                          top: i * ITEM_H, left: 0, right: 0, height: ITEM_H,
+                          display: "flex", alignItems: "center",
+                          padding: "0 14px", gap: 12,
+                          background: i === currentIdx ? "#1a1a1a" : "transparent",
+                          borderBottom: "1px solid #1a1a1a",
+                          cursor: "pointer", boxSizing: "border-box",
+                        }}
+                      >
+                        <div style={{ width: 40, height: 40, borderRadius: 8, background: "#181818", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #222" }}>
+                          {t.art ? <img src={t.art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ transform: "scale(0.8)" }}><MusicNote /></div>}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: i === currentIdx ? 800 : 500, color: i === currentIdx ? "#fc3c44" : "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {t.name}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={ev => ev.stopPropagation()}>
+                          <button onClick={() => moveTrack(i, -1)} disabled={i === 0}
+                            style={{ background: "#222", border: "none", color: "#666", width: 24, height: 24, borderRadius: 6, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>▲</button>
+                          <button onClick={() => moveTrack(i, 1)} disabled={i === tracks.length - 1}
+                            style={{ background: "#222", border: "none", color: "#666", width: 24, height: 24, borderRadius: 6, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>▼</button>
+                          <button onClick={ev => removeTrack(i, ev)}
+                            style={{ background: "none", border: "none", color: "#666", fontSize: 20, cursor: "pointer", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => moveTrack(i, -1)} disabled={i === 0}
-                        style={{ background: "#222", border: "none", color: "#666", width: 24, height: 24, borderRadius: 6, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>▲</button>
-                      <button onClick={() => moveTrack(i, 1)} disabled={i === tracks.length - 1}
-                        style={{ background: "#222", border: "none", color: "#666", width: 24, height: 24, borderRadius: 6, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>▼</button>
-                      <button onClick={e => removeTrack(i, e)}
-                        style={{ background: "none", border: "none", color: "#666", fontSize: 20, cursor: "pointer", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-                    </div>
-                  </div>
-                ))}
-               </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           ) : (
             <div className="flat-card" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#444", fontSize: 12 }}>
@@ -894,6 +902,7 @@ function MusicPlayer() {
         {/* ── EINSTELLUNGEN ── */}
         {view === "tuning" && (
           <div className="flat-card" style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+
             <div style={{ marginBottom: 32 }}>
               <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}>Allgemein</h3>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -906,19 +915,17 @@ function MusicPlayer() {
                   </div>
                 </div>
                 <button onClick={() => setHeadphoneOnly(v => !v)}
-                  style={{
-                    width: 44, height: 26, borderRadius: 13, background: headphoneOnly ? "#fc3c44" : "#2a2a2a", border: `1px solid ${headphoneOnly ? "#fc3c44" : "#444"}`, cursor: "pointer", position: "relative", flexShrink: 0, transition: "all 0.2s"
-                  }}>
+                  style={{ width: 44, height: 26, borderRadius: 13, background: headphoneOnly ? "#fc3c44" : "#2a2a2a", border: `1px solid ${headphoneOnly ? "#fc3c44" : "#444"}`, cursor: "pointer", position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
                   <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: headphoneOnly ? 22 : 3, transition: "left 0.2s" }} />
                 </button>
               </div>
               {headphoneOnly && headphonesDetected === null && (
-                 <div style={{ marginTop: 12, fontSize: 11, color: "#555", lineHeight: 1.6 }}>
+                <div style={{ marginTop: 12, fontSize: 11, color: "#555", lineHeight: 1.6 }}>
                   Kopfhörererkennung benötigt Browser-Berechtigung für Audiogeräte. Auf iOS ist die Erkennung systemseitig nicht verfügbar.
                 </div>
               )}
             </div>
-         
+
             <div style={{ marginBottom: 32 }}>
               <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Song-Tuner</h3>
               <p style={{ fontSize: 12, color: "#666", marginBottom: 20 }}>
@@ -932,7 +939,6 @@ function MusicPlayer() {
                   {tracks.map((t, i) => <option key={t.id} value={i}>{t.name}</option>)}
                 </select>
               </div>
-
               {[
                 { label: "Bass (150Hz)",  val: eqBass,   set: setEqBass },
                 { label: "Mitten (1kHz)", val: eqMid,    set: setEqMid },
@@ -948,7 +954,6 @@ function MusicPlayer() {
                     style={{ width: "100%", background: `linear-gradient(to right, #fc3c44 ${((band.val + 12) / 24) * 100}%, #222 ${((band.val + 12) / 24) * 100}%)` }} />
                 </div>
               ))}
-
               {renderTrackIdx !== "" && (
                 <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: 20, marginBottom: 20 }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: "#3a3a3a", letterSpacing: "0.1em", marginBottom: 12 }}>LIVE-VORSCHAU</div>
@@ -959,19 +964,13 @@ function MusicPlayer() {
                     <input type="range" min="0" max={previewDuration || 100} value={previewTime}
                       onMouseDown={() => setPreviewScrubbing(true)} onMouseUp={() => setPreviewScrubbing(false)}
                       onTouchStart={() => setPreviewScrubbing(true)} onTouchEnd={() => setPreviewScrubbing(false)}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        setPreviewTime(v);
-                        if (previewAudioRef.current) previewAudioRef.current.currentTime = v;
-                      }}
-                      style={{ width: "100%", marginBottom: 6, background: `linear-gradient(to right, #fc3c44 ${previewProgress}%, #222 ${previewProgress}%)` }}
-                    />
+                      onChange={(e) => { const v = parseFloat(e.target.value); setPreviewTime(v); if (previewAudioRef.current) previewAudioRef.current.currentTime = v; }}
+                      style={{ width: "100%", marginBottom: 6, background: `linear-gradient(to right, #fc3c44 ${previewProgress}%, #222 ${previewProgress}%)` }} />
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555" }}>
                       <span>{formatTime(previewTime)}</span>
                       <span>-{formatTime(previewDuration - previewTime)}</span>
                     </div>
                   </div>
-
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 24 }}>
                     <button onClick={() => seekPreview(-10)} className="icon-btn" style={{ flexDirection: "column", gap: 3, color: "#555" }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.45"/></svg>
@@ -979,7 +978,9 @@ function MusicPlayer() {
                     </button>
                     <button onClick={togglePreviewPlay}
                       style={{ width: 52, height: 52, borderRadius: "50%", background: previewPlaying ? "#fc3c44" : "#242424", border: `2px solid ${previewPlaying ? "#fc3c44" : "#333"}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
-                      {previewPlaying ? <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg> : <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" style={{ marginLeft: 2 }}><polygon points="6 3 20 12 6 21 6 3"/></svg>}
+                      {previewPlaying
+                        ? <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+                        : <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" style={{ marginLeft: 2 }}><polygon points="6 3 20 12 6 21 6 3"/></svg>}
                     </button>
                     <button onClick={() => seekPreview(10)} className="icon-btn" style={{ flexDirection: "column", gap: 3, color: "#555" }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.45"/></svg>
@@ -988,7 +989,6 @@ function MusicPlayer() {
                   </div>
                 </div>
               )}
-
               <button onClick={renderAndDownloadTrack} disabled={isRendering || renderTrackIdx === ""}
                 style={{ width: "100%", background: renderTrackIdx === "" ? "#1a1a1a" : "#222", color: renderTrackIdx === "" ? "#444" : "#fff", border: `1px solid ${renderTrackIdx === "" ? "#222" : "#444"}`, borderRadius: 12, padding: "12px", fontSize: 14, fontWeight: 700, cursor: renderTrackIdx === "" ? "not-allowed" : "pointer" }}>
                 {isRendering ? "Berechne EQ..." : "↓  Tuned song exportieren  (m4a)"}
@@ -1012,7 +1012,6 @@ function MusicPlayer() {
                   style={{ width: "100%", background: "#0f1f3d", color: isImporting ? "#666" : "#60a5fa", border: "1px solid #1a2f5c", borderRadius: 12, padding: "12px", fontSize: 14, fontWeight: 700, cursor: isImporting ? "not-allowed" : "pointer" }}>
                   {isImporting ? "Importiere..." : "↑  Backup importieren"}
                 </button>
-
                 {!confirmClear ? (
                   <button onClick={() => setConfirmClear(true)}
                     style={{ width: "100%", background: "none", color: "#444", border: "1px solid #222", borderRadius: 12, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
@@ -1030,7 +1029,7 @@ function MusicPlayer() {
                     </button>
                   </div>
                 )}
-               </div>
+              </div>
               <div style={{ marginTop: 16, padding: "12px 14px", background: "#0d0d0d", borderRadius: 10, fontSize: 11, color: "#3a3a3a", lineHeight: 1.7 }}>
                 ⚡ Titel werden automatisch im Browser-Speicher (IndexedDB) persistiert und beim nächsten Start wiederhergestellt — ohne manuelles Speichern.<br/>
                 Das Backup schützt zusätzlich gegen Browser-Cache-Löschung oder Gerätewechsel.
